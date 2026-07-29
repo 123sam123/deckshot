@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <meta name="color-scheme" content="dark" />
+    <title>DECKSHOT</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #05080d;
+        color: #e6edf3;
+        font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      }
+      #game {
+        position: fixed;
+        inset: 0;
+        display: block;
+        /* Explicit 100% is required: <canvas> is a replaced element, so
+           `inset: 0` alone leaves it at its intrinsic 300x150. */
+        width: 100%;
+        height: 100%;
+      }
+      #ui {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+      }
+      #ui > * {
+        pointer-events: auto;
+      }
+      canvas {
+        display: block;
+        outline: none;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <div id="ui"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

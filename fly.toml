@@ -1,0 +1,45 @@
+# DECKSHOT on Fly.io
+#
+#   fly launch --no-deploy --copy-config
+#   fly deploy
+#
+# See deploy.md for the full walkthrough.
+
+app = "deckshot"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  NODE_ENV = "production"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  # Keep one machine warm: a cold start mid-match drops everyone in the lobby.
+  min_machines_running = 1
+  processes = ["app"]
+
+  # Real-time game traffic. Long-lived WebSockets, so generous idle timeouts.
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 200
+    soft_limit = 150
+
+[[vm]]
+  # The authoritative sim is single-threaded and runs at 60Hz per lobby.
+  # CPU headroom matters more than RAM here.
+  size = "shared-cpu-2x"
+  memory = "1gb"
+
+[checks.health]
+  type = "http"
+  port = 8080
+  path = "/health"
+  interval = "15s"
+  timeout = "3s"
+  grace_period = "10s"
