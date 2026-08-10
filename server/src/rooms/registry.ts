@@ -97,8 +97,11 @@ export class LobbyRegistry {
       return this.fail(conn, ErrorCode.RateLimited, 'Slow down — too many join attempts.');
     }
     // Fill matches rather than scattering people: the fullest joinable lobby.
+    // SURVIVAL lobbies are excluded — a co-op squad is something you join on
+    // purpose with a code, not something quick-play drops a stranger into.
     let best: Lobby | undefined;
     for (const lobby of this.lobbies.values()) {
+      if (lobby.mode === GameMode.Survival) continue;
       if (!lobby.hasSpace()) continue;
       if (!best || lobby.slotCount() > best.slotCount()) best = lobby;
     }

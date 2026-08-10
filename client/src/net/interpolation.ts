@@ -65,6 +65,8 @@ export interface RemotePlayerState {
   adsState: AdsState;
   adsProgress: number;
   firedThisTick: boolean;
+  /** SURVIVAL: last stand (Flags bit 3). */
+  downed: boolean;
   score: number;
   kills: number;
   deaths: number;
@@ -109,6 +111,7 @@ export function blankRemote(id: PlayerId): RemotePlayerState {
     adsState: AdsState.Hip,
     adsProgress: 0,
     firedThisTick: false,
+    downed: false,
     score: 0,
     kills: 0,
     deaths: 0,
@@ -376,6 +379,7 @@ function applyDelta(dst: RemotePlayerState, src: SnapshotPlayerExt): void {
     dst.onGround = src.onGround;
     dst.alive = src.alive;
     dst.firedThisTick = src.firedThisTick;
+    dst.downed = src.downed === true;
   } else {
     dst.firedThisTick = false;
   }
@@ -423,6 +427,7 @@ export function copyRemote(src: RemotePlayerState, dst: RemotePlayerState): void
   dst.adsState = src.adsState;
   dst.adsProgress = src.adsProgress;
   dst.firedThisTick = src.firedThisTick;
+  dst.downed = src.downed;
   dst.score = src.score;
   dst.kills = src.kills;
   dst.deaths = src.deaths;

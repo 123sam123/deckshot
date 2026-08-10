@@ -35,11 +35,13 @@ import {
   type HelloMsg,
   type HitMsg,
   type InputMsg,
+  type InteractMsg,
   type JoinLobbyMsg,
   type KillMsg,
   type LobbyPlayerInfo,
   type LobbyStateMsg,
   type MatchOverMsg,
+  type PurchaseMsg,
   type RoundStateMsg,
   type ScoreboardEntry,
   type SetLoadoutMsg,
@@ -47,6 +49,7 @@ import {
   type SnapshotMsg,
   type SnapshotPlayer,
   type SpawnMsg,
+  type SurvivalStateMsg,
   type WelcomeMsg,
 } from './protocol.js';
 import {
@@ -403,7 +406,7 @@ function writeLoadout(w: ByteWriter, l: Loadout | undefined): void {
 }
 
 function readLoadout(r: ByteReader): Loadout {
-  const primary = clampEnum(r.u8(), WeaponId.Talon, WeaponId.Knife) as WeaponId;
+  const primary = clampEnum(r.u8(), WeaponId.Talon, WeaponId.Harrier) as WeaponId;
   const a0 = clampAttachment(r.u8());
   const a1 = clampAttachment(r.u8());
   const a2 = clampAttachment(r.u8());
@@ -475,6 +478,7 @@ export const SNAPSHOT_ALL_FIELDS =
 const FLAG_ON_GROUND = 1 << 0;
 const FLAG_ALIVE = 1 << 1;
 const FLAG_FIRED = 1 << 2;
+const FLAG_DOWNED = 1 << 3; // SURVIVAL last stand
 
 function writeSnapshotPlayer(w: ByteWriter, p: SnapshotPlayerExt): void {
   let mask = p.mask === undefined ? SNAPSHOT_BASIC_FIELDS : p.mask & 0xffff;
@@ -499,7 +503,8 @@ function writeSnapshotPlayer(w: ByteWriter, p: SnapshotPlayerExt): void {
     w.u8(
       (p.onGround ? FLAG_ON_GROUND : 0) |
         (p.alive ? FLAG_ALIVE : 0) |
-        (p.firedThisTick ? FLAG_FIRED : 0)
+        (p.firedThisTick ? FLAG_FIRED : 0) |
+        (p.downed ? FLAG_DOWNED : 0)
     );
   }
   if (mask & SnapshotField.Health) w.u8(clampEnum(Math.round(p.health), 0, 255));
@@ -555,10 +560,11 @@ function readSnapshotPlayer(r: ByteReader): SnapshotPlayerExt {
     p.onGround = (f & FLAG_ON_GROUND) !== 0;
     p.alive = (f & FLAG_ALIVE) !== 0;
     p.firedThisTick = (f & FLAG_FIRED) !== 0;
+    p.downed = (f & FLAG_DOWNED) !== 0;
   }
   if (mask & SnapshotField.Health) p.health = r.u8();
   if (mask & SnapshotField.Weapon) {
-    p.activeWeapon = clampEnum(r.u8(), WeaponId.Talon, WeaponId.Knife);
+    p.activeWeapon = clampEnum(r.u8(), WeaponId.Talon, WeaponId.Harrier);
   }
   if (mask & SnapshotField.Ads) {
     p.adsState = clampEnum(r.u8() & 0x03, AdsState.Hip, AdsState.Lowering);
@@ -601,7 +607,7 @@ function writeKill(w: ByteWriter, k: KillMsg): void {
 function readKill(r: ByteReader): KillMsg {
   const killerId = r.u8();
   const victimId = r.u8();
-  const weapon = clampEnum(r.u8(), WeaponId.Talon, WeaponId.Knife) as WeaponId;
+  const weapon = clampEnum(r.u8(), WeaponId.Talon, WeaponId.Harrier) as WeaponId;
   const part = clampEnum(r.u8(), HitboxPart.Head, HitboxPart.LegR) as HitboxPart;
   const distance = r.u16() / 16;
   const trickshot = r.u16();
@@ -681,6 +687,16 @@ function encodeClientMessage(w: ByteWriter, msg: AnyClientMessage): void {
     }
     case ClientMessage.Pong: {
       w.f64(msg.data.time);
+      return;
+    }
+    case ClientMessage.Purchase: {
+      const d = msg.data as PurchaseMsg;
+      w.u8(d.kind & 0xff);
+      w.u8(d.itemId & 0xff);
+      return;
+    }
+    case ClientMessage.Interact: {
+      w.u8((msg.data as InteractMsg).target & 0xff);
       return;
     }
     default: {
@@ -765,7 +781,7 @@ function decodeClientMessage(r: ByteReader): AnyClientMessage {
     case ClientMessage.CreateLobby:
       return {
         type,
-        data: { mode: clampEnum(r.u8(), GameMode.SnipersOnlyFFA, GameMode.TeamDeathmatch), scoreLimit: r.u16() },
+        data: { mode: clampEnum(r.u8(), GameMode.SnipersOnlyFFA, GameMode.Survival), scoreLimit: r.u16() },
       };
     case ClientMessage.JoinLobby:
       return { type, data: { code: r.str() } };
@@ -779,7 +795,7 @@ function decodeClientMessage(r: ByteReader): AnyClientMessage {
       return {
         type,
         data: {
-          mode: clampEnum(r.u8(), GameMode.SnipersOnlyFFA, GameMode.TeamDeathmatch),
+          mode: clampEnum(r.u8(), GameMode.SnipersOnlyFFA, GameMode.Survival),
           scoreLimit: r.u16(),
           timeLimit: r.u16(),
         },
@@ -792,6 +808,10 @@ function decodeClientMessage(r: ByteReader): AnyClientMessage {
       return { type, data: readInput(r) };
     case ClientMessage.Pong:
       return { type, data: { time: r.f64() } };
+    case ClientMessage.Purchase:
+      return { type, data: { kind: r.u8(), itemId: r.u8() } };
+    case ClientMessage.Interact:
+      return { type, data: { target: r.u8() } };
     default:
       throw new DecodeError(`unknown client message type ${type}`);
   }
@@ -925,6 +945,35 @@ function encodeServerMessage(w: ByteWriter, msg: AnyServerMessage): void {
       }
       return;
     }
+    case ServerMessage.SurvivalState: {
+      const d = msg.data as SurvivalStateMsg;
+      w.u16(clampEnum(Math.round(d.round), 0, 0xffff));
+      w.u8(d.phase & 0xff);
+      w.f32(d.timeRemaining);
+      w.u16(clampEnum(Math.round(d.zombiesRemaining), 0, 0xffff));
+      w.u8(d.powerOn ? 1 : 0);
+      w.u16(d.zoneMask & 0xffff);
+      w.u8(d.crateZone & 0xff);
+      const ups = d.powerups ?? [];
+      const un = ups.length > 8 ? 8 : ups.length;
+      w.u8(un);
+      for (let i = 0; i < un; i++) {
+        w.u8(ups[i][0] & 0xff);
+        w.f32(ups[i][1]);
+      }
+      w.u32(Math.max(0, Math.round(d.yourPoints)));
+      w.u8(d.yourPerks & 0xff);
+      w.f32(d.yourBleedout);
+      w.u8(d.yourForged ? 1 : 0);
+      w.u8(d.yourHeldWeapon & 0xff);
+      w.u8(d.yourStowedWeapon & 0xff);
+      w.u16(clampEnum(Math.round(d.yourAmmoInMag), 0, 0xffff));
+      w.u16(clampEnum(Math.round(d.yourAmmoReserve), 0, 0xffff));
+      w.u16(clampEnum(Math.round(d.yourStowedMag), 0, 0xffff));
+      w.u16(clampEnum(Math.round(d.yourStowedReserve), 0, 0xffff));
+      w.u8(d.yourCrateOffer & 0xff);
+      return;
+    }
     default: {
       const never: never = msg;
       throw new DecodeError(`unencodable server message ${JSON.stringify(never)}`);
@@ -994,7 +1043,7 @@ function decodeServerMessage(r: ByteReader): AnyServerMessage {
     case ServerMessage.LobbyState: {
       const code = r.str();
       const hostId = r.u8();
-      const mode = clampEnum(r.u8(), GameMode.SnipersOnlyFFA, GameMode.TeamDeathmatch) as GameMode;
+      const mode = clampEnum(r.u8(), GameMode.SnipersOnlyFFA, GameMode.Survival) as GameMode;
       const scoreLimit = r.u16();
       const timeLimit = r.u16();
       const inProgress = r.u8() !== 0;
@@ -1077,6 +1126,54 @@ function decodeServerMessage(r: ByteReader): AnyServerMessage {
       const hasBest = r.u8() !== 0;
       const bestTrickshot = hasBest ? readKill(r) : null;
       return { type, data: { scoreboard, winnerId, winnerTeam, bestTrickshot } };
+    }
+    case ServerMessage.SurvivalState: {
+      const round = r.u16();
+      const phase = r.u8();
+      const timeRemaining = r.f32();
+      const zombiesRemaining = r.u16();
+      const powerOn = r.u8() !== 0;
+      const zoneMask = r.u16();
+      const crateZone = r.u8();
+      const un = r.u8();
+      if (un > 8) throw new DecodeError(`powerup count ${un}`);
+      const powerups: Array<[number, number]> = [];
+      for (let i = 0; i < un; i++) powerups.push([r.u8(), r.f32()]);
+      const yourPoints = r.u32();
+      const yourPerks = r.u8();
+      const yourBleedout = r.f32();
+      const yourForged = r.u8() !== 0;
+      const yourHeldWeapon = clampEnum(r.u8(), WeaponId.Talon, WeaponId.Harrier) as WeaponId;
+      const yourStowedWeapon = clampEnum(r.u8(), WeaponId.Talon, WeaponId.Harrier) as WeaponId;
+      const yourAmmoInMag = r.u16();
+      const yourAmmoReserve = r.u16();
+      const yourStowedMag = r.u16();
+      const yourStowedReserve = r.u16();
+      const yourCrateOffer = r.u8();
+      return {
+        type,
+        data: {
+          round,
+          phase,
+          timeRemaining,
+          zombiesRemaining,
+          powerOn,
+          zoneMask,
+          crateZone,
+          powerups,
+          yourPoints,
+          yourPerks,
+          yourBleedout,
+          yourForged,
+          yourHeldWeapon,
+          yourStowedWeapon,
+          yourAmmoInMag,
+          yourAmmoReserve,
+          yourStowedMag,
+          yourStowedReserve,
+          yourCrateOffer,
+        },
+      };
     }
     default:
       throw new DecodeError(`unknown server message type ${type}`);

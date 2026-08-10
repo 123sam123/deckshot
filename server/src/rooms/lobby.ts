@@ -38,6 +38,12 @@ import {
   TDM_SCORE_LIMIT,
 } from '../../../shared/tuning.js';
 import {
+  MAX_PLAYERS_SURVIVAL,
+  MIN_PLAYERS_SURVIVAL,
+  SURVIVAL_SCORE_LIMIT,
+  SURVIVAL_TIME_LIMIT,
+} from '../../../shared/survival.js';
+import {
   AttachmentId,
   DEFAULT_LOADOUT,
   GameMode,
@@ -58,7 +64,25 @@ const ROUND_REFRESH_MS = 1_000;
 const NAME_MAX = 16;
 
 function defaultScoreLimit(mode: GameMode): number {
+  if (mode === GameMode.Survival) return SURVIVAL_SCORE_LIMIT;
   return mode === GameMode.TeamDeathmatch ? TDM_SCORE_LIMIT : FFA_SCORE_LIMIT;
+}
+
+/** Clamp an arbitrary byte to a real mode. Unknown values fall back to FFA. */
+function coerceMode(mode: GameMode): GameMode {
+  return mode === GameMode.TeamDeathmatch || mode === GameMode.Survival
+    ? mode
+    : GameMode.SnipersOnlyFFA;
+}
+
+/** SURVIVAL is a 5-seat co-op squad; the competitive modes keep MAX_PLAYERS. */
+export function maxPlayersFor(mode: GameMode): number {
+  return mode === GameMode.Survival ? MAX_PLAYERS_SURVIVAL : MAX_PLAYERS;
+}
+
+/** SURVIVAL starts solo. */
+export function minPlayersFor(mode: GameMode): number {
+  return mode === GameMode.Survival ? MIN_PLAYERS_SURVIVAL : MIN_PLAYERS_TO_START;
 }
 
 /** Strip control characters, trim, clamp length. Empty stays empty. */
@@ -119,16 +143,24 @@ export class Lobby {
   private phaseEndsAt = 0;
   private lastLobbyBroadcast = 0;
   private lastRoundBroadcast = 0;
+  /** Registry clock at the most recent tick; endMatch anchors timers to it. */
+  private lastTickNow = 0;
 
   constructor(code: LobbyCode, mode: GameMode, scoreLimit: number, timeLimit: number) {
     this.code = code;
-    this.mode = mode === GameMode.TeamDeathmatch ? GameMode.TeamDeathmatch : GameMode.SnipersOnlyFFA;
-    this.scoreLimit =
-      Number.isFinite(scoreLimit) && scoreLimit > 0
-        ? Math.floor(scoreLimit)
-        : defaultScoreLimit(this.mode);
-    this.timeLimit =
-      Number.isFinite(timeLimit) && timeLimit > 0 ? Math.floor(timeLimit) : MATCH_TIME_LIMIT;
+    this.mode = coerceMode(mode);
+    if (this.mode === GameMode.Survival) {
+      // Kills and clocks must never end a SURVIVAL match — only the wipe does.
+      this.scoreLimit = SURVIVAL_SCORE_LIMIT;
+      this.timeLimit = SURVIVAL_TIME_LIMIT;
+    } else {
+      this.scoreLimit =
+        Number.isFinite(scoreLimit) && scoreLimit > 0
+          ? Math.floor(scoreLimit)
+          : defaultScoreLimit(this.mode);
+      this.timeLimit =
+        Number.isFinite(timeLimit) && timeLimit > 0 ? Math.floor(timeLimit) : MATCH_TIME_LIMIT;
+    }
     this.scoreKeeper = new ScoreKeeper(this.mode, this.scoreLimit, this.timeLimit);
   }
 
@@ -164,7 +196,7 @@ export class Lobby {
   }
 
   hasSpace(): boolean {
-    return this.members.size < MAX_PLAYERS;
+    return this.members.size < maxPlayersFor(this.mode);
   }
 
   get inProgress(): boolean {
@@ -279,11 +311,13 @@ export class Lobby {
   }
 
   private allocatePlayerId(): PlayerId {
-    // u8 on the wire, 0 reserved. Reuse freed ids by scanning from the cursor.
-    for (let i = 0; i < 255; i++) {
-      const candidate = ((this.nextPlayerId - 1 + i) % 255) + 1;
+    // u8 on the wire, 0 reserved, and ids >= ZOMBIE_ID_BASE (200) belong to
+    // SURVIVAL's horde — players stay in 1..199 in every mode so the client's
+    // id-range partition is unambiguous.
+    for (let i = 0; i < 199; i++) {
+      const candidate = ((this.nextPlayerId - 1 + i) % 199) + 1;
       if (!this.members.has(candidate)) {
-        this.nextPlayerId = (candidate % 255) + 1;
+        this.nextPlayerId = (candidate % 199) + 1;
         return candidate;
       }
     }
@@ -291,6 +325,9 @@ export class Lobby {
   }
 
   private assignTeam(): TeamId {
+    // SURVIVAL: the whole squad is Alpha; the horde is Bravo. The frozen
+    // TeamId enum is reused, never extended.
+    if (this.mode === GameMode.Survival) return TeamId.Alpha;
     if (this.mode !== GameMode.TeamDeathmatch) return TeamId.FFA;
     let alpha = 0;
     let bravo = 0;
@@ -328,9 +365,10 @@ export class Lobby {
   /** Reassign every member's team to fit the (possibly new) mode. */
   reassignTeams(): void {
     if (this.mode !== GameMode.TeamDeathmatch) {
+      const team = this.mode === GameMode.Survival ? TeamId.Alpha : TeamId.FFA;
       for (const m of this.members.values()) {
-        m.team = TeamId.FFA;
-        this.scoreKeeper.setTeam(m.playerId, TeamId.FFA);
+        m.team = team;
+        this.scoreKeeper.setTeam(m.playerId, team);
       }
       return;
     }
@@ -352,16 +390,22 @@ export class Lobby {
   /** Host-only config change. Returns false when `by` is not the host. */
   setMatchConfig(by: PlayerId, mode: GameMode, scoreLimit: number, timeLimit: number): boolean {
     if (by !== this.hostId) return false;
-    const nextMode =
-      mode === GameMode.TeamDeathmatch ? GameMode.TeamDeathmatch : GameMode.SnipersOnlyFFA;
+    const nextMode = coerceMode(mode);
+    // A 6+ player lobby cannot become a 5-seat SURVIVAL squad.
+    if (nextMode === GameMode.Survival && this.members.size > MAX_PLAYERS_SURVIVAL) return false;
     const modeChanged = nextMode !== this.mode;
     this.mode = nextMode;
-    this.scoreLimit =
-      Number.isFinite(scoreLimit) && scoreLimit > 0
-        ? Math.floor(scoreLimit)
-        : defaultScoreLimit(this.mode);
-    this.timeLimit =
-      Number.isFinite(timeLimit) && timeLimit > 0 ? Math.floor(timeLimit) : MATCH_TIME_LIMIT;
+    if (this.mode === GameMode.Survival) {
+      this.scoreLimit = SURVIVAL_SCORE_LIMIT;
+      this.timeLimit = SURVIVAL_TIME_LIMIT;
+    } else {
+      this.scoreLimit =
+        Number.isFinite(scoreLimit) && scoreLimit > 0
+          ? Math.floor(scoreLimit)
+          : defaultScoreLimit(this.mode);
+      this.timeLimit =
+        Number.isFinite(timeLimit) && timeLimit > 0 ? Math.floor(timeLimit) : MATCH_TIME_LIMIT;
+    }
     if (modeChanged) this.reassignTeams();
     return true;
   }
@@ -408,6 +452,28 @@ export class Lobby {
 
   recordYaw(id: PlayerId, tSeconds: number, yaw: number, onGround: boolean): void {
     this.scoreKeeper.recordYaw(id, tSeconds, yaw, onGround);
+  }
+
+  /**
+   * SURVIVAL squad wipe (ScoringSink.endMatch): the sim says the match is
+   * over. Uses the same Over -> Warmup path a score-limit finish takes.
+   */
+  endMatch(): void {
+    if (this.phase !== RoundPhase.Live) return;
+    const now = this.lastTickNow;
+    this.phase = RoundPhase.Over;
+    this.phaseEndsAt = now + POST_MATCH_TIME * 1000;
+    const board = this.scoreKeeper.scoreboard();
+    this.broadcast({
+      type: ServerMessage.MatchOver,
+      data: {
+        scoreboard: board,
+        winnerId: board.length > 0 ? board[0].id : 0,
+        winnerTeam: TeamId.Alpha,
+        bestTrickshot: this.scoreKeeper.bestTrickshot(),
+      },
+    });
+    this.broadcastRoundState(now);
   }
 
   scoreboard(): ScoreboardEntry[] {
@@ -492,6 +558,7 @@ export class Lobby {
 
   /** Drive phases. Called from the registry tick at TICK_RATE. */
   tick(now: number): void {
+    this.lastTickNow = now;
     switch (this.phase) {
       case RoundPhase.Warmup: {
         if (this.readyToStart()) {
@@ -558,7 +625,7 @@ export class Lobby {
       connected++;
       if (!m.ready) return false;
     }
-    return connected >= MIN_PLAYERS_TO_START;
+    return connected >= minPlayersFor(this.mode);
   }
 
   private startMatch(now: number): void {

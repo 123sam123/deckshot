@@ -131,6 +131,8 @@ export interface FireContext {
   input: ClientInput;
   weaponRuntime: WeaponRuntimeHandle;
   resolvedWeapon: ResolvedWeaponHandle;
+  /** The room's static geometry. Absent = the Sundeck singleton. */
+  world?: unknown;
 }
 
 /**
@@ -206,6 +208,7 @@ export function createDefaultHooks(): SimHooks & { combat: CombatSystem } {
         input: ctx.input,
         targets: ctx.targets,
         now: ctx.nowSeconds,
+        world: ctx.world as never,
       }),
   };
 }

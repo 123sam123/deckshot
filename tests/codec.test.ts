@@ -697,11 +697,13 @@ describe('malformed input', () => {
   });
 
   it('rejects unknown message types', () => {
-    for (const t of [0, 13, 63, 99, 200, 255]) {
+    // 13 (Purchase) and 14 (Interact) became real messages with SURVIVAL;
+    // 15 is the new first unknown client type, 77 the first unknown server one.
+    for (const t of [0, 15, 63, 99, 200, 255]) {
       const buf = new Uint8Array([t, 0, 0, 0]);
       expect(() => decodeClient(buf.buffer)).toThrow(DecodeError);
     }
-    for (const t of [0, 1, 63, 76, 255]) {
+    for (const t of [0, 1, 63, 77, 255]) {
       const buf = new Uint8Array([t, 0, 0, 0]);
       expect(() => decodeServer(buf.buffer)).toThrow(DecodeError);
     }

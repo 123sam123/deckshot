@@ -22,6 +22,7 @@ import type {
   MatchOverMsg,
   RoundStateMsg,
   ScoreboardEntry,
+  SurvivalStateMsg,
 } from '../../../shared/protocol.js';
 import type { AdsState, GameMode, Loadout, PlayerId, WeaponId } from '../../../shared/types.js';
 
@@ -57,6 +58,8 @@ export interface LocalHudState {
   streak: number;
   /** Seconds until respawn is available; 0 when alive or ready to deploy. */
   respawnIn: number;
+  /** SURVIVAL: true while in last stand (crawling, pistol only). */
+  downed?: boolean;
 }
 
 /**
@@ -110,6 +113,10 @@ export interface UIHandle {
    * `angle`: radians clockwise relative to the camera forward; 0 = ahead.
    */
   showDamageFrom(angle: number): void;
+  /** SURVIVAL: the per-recipient round/economy/progression message. */
+  onSurvivalState(msg: SurvivalStateMsg): void;
+  /** SURVIVAL: contextual "hold F to ..." prompt; null clears it. */
+  setSurvivalPrompt(text: string | null): void;
   /** Hard reset to the landing screen (e.g. fatal disconnect). */
   reset(): void;
   /** Current persisted settings — read once at boot for engine setup. */

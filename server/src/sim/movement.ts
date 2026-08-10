@@ -102,7 +102,7 @@ export function stepPlayerMovement(
   return {
     state: s,
     suspicious,
-    outOfBounds: isOutOfBounds(s.position),
+    outOfBounds: isOutOfBounds(s.position, world),
     landed: result.landed,
     impactSpeed: result.impactSpeed,
   };

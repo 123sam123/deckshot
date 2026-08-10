@@ -59,6 +59,10 @@ export enum ClientMessage {
   Pong = 11,
   /** Client asks to respawn after the death timer expires. */
   RequestRespawn = 12,
+  /** SURVIVAL: buy a zone, wall weapon, perk, upgrade, ammo or crate spin. */
+  Purchase = 13,
+  /** SURVIVAL: flip the generator, take a crate weapon. */
+  Interact = 14,
 }
 
 export enum ServerMessage {
@@ -85,6 +89,8 @@ export enum ServerMessage {
   Correction = 74,
   /** Match ended; carries final scoreboard and best trickshot. */
   MatchOver = 75,
+  /** SURVIVAL: round machine, zones, power, per-recipient points/perks. ~1Hz + on change. */
+  SurvivalState = 76,
 }
 
 // ---------------------------------------------------------------------------
@@ -116,6 +122,21 @@ export interface SetMatchConfigMsg {
 
 export interface SetLoadoutMsg {
   loadout: Loadout;
+}
+
+/**
+ * SURVIVAL purchases. What `itemId` means depends on `kind`:
+ * Zone -> zone index, Weapon -> WeaponId (wall buy or ammo re-buy),
+ * Perk -> PerkId, Forge/Crate -> ignored.
+ */
+export interface PurchaseMsg {
+  kind: number; // shared/survival.ts PurchaseKind
+  itemId: number;
+}
+
+/** SURVIVAL interactions that are not purchases. */
+export interface InteractMsg {
+  target: number; // shared/survival.ts InteractTarget
 }
 
 /**
@@ -206,6 +227,8 @@ export interface SnapshotPlayer {
   adsProgress: number;
   /** Set for one snapshot on the tick the player fired; drives remote VFX. */
   firedThisTick: boolean;
+  /** SURVIVAL: last stand. Rides Flags bit 3 (additive; bits 3-7 were free). */
+  downed?: boolean;
 }
 
 /**
@@ -229,7 +252,7 @@ export enum SnapshotField {
   Yaw = 1 << 2, // u16 quantized
   Pitch = 1 << 3, // i16 quantized
   Stance = 1 << 4, // u8
-  Flags = 1 << 5, // u8: bit0 onGround, bit1 alive, bit2 firedThisTick
+  Flags = 1 << 5, // u8: bit0 onGround, bit1 alive, bit2 firedThisTick, bit3 downed (SURVIVAL)
   Health = 1 << 6, // u8
   Weapon = 1 << 7, // u8
   Ads = 1 << 8, // u8 state (2 bits) + u8 progress (0..255)
@@ -350,6 +373,51 @@ export interface MatchOverMsg {
   bestTrickshot: KillMsg | null;
 }
 
+/**
+ * SURVIVAL round machine + map progression, assembled PER RECIPIENT (the
+ * `your*` fields differ per client). Sent on any change and at ~1Hz. Everything
+ * squad-wide that the snapshot channel does not carry lives here; zombie
+ * positions ride the ordinary snapshot as id >= ZOMBIE_ID_BASE entities.
+ */
+export interface SurvivalStateMsg {
+  round: number;
+  /** shared/survival.ts SurvivalPhase. */
+  phase: number;
+  /** Seconds remaining in the current phase (intermission countdown; 0 mid-wave). */
+  timeRemaining: number;
+  /** Zombies not yet killed this round (spawned + pending). */
+  zombiesRemaining: number;
+  powerOn: boolean;
+  /** Bit per zone index; bit set = purchased/open. */
+  zoneMask: number;
+  /** Zone index the mystery crate currently sits in; 255 = none. */
+  crateZone: number;
+  /** Active power-ups: [PowerupId, secondsRemaining] pairs. */
+  powerups: Array<[number, number]>;
+  /** Recipient's spendable balance (u32 — `score` saturates at 65535). */
+  yourPoints: number;
+  /** Recipient's PerkId bitfield. */
+  yourPerks: number;
+  /** Recipient's seconds of bleedout left; 0 when not downed. */
+  yourBleedout: number;
+  /** True once the recipient's weapon has been through The Forge. */
+  yourForged: boolean;
+  /**
+   * Recipient's authoritative arsenal. Ammo is not in the snapshot, and
+   * SURVIVAL grants/refills weapons server-side, so prediction syncs from
+   * here (a refill only ever RAISES a counter — the client keeps its own
+   * prediction when it is ahead).
+   */
+  yourHeldWeapon: WeaponId;
+  yourStowedWeapon: WeaponId;
+  yourAmmoInMag: number;
+  yourAmmoReserve: number;
+  yourStowedMag: number;
+  yourStowedReserve: number;
+  /** WeaponId the crate rolled for the recipient, or 255 when no offer stands. */
+  yourCrateOffer: number;
+}
+
 // ---------------------------------------------------------------------------
 // Session / reconnect
 // ---------------------------------------------------------------------------
@@ -365,7 +433,7 @@ export const LOBBY_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const LOBBY_CODE_LENGTH = 4;
 
 /** Bumped on any protocol change. Server rejects mismatched clients. */
-export const PROTOCOL_VERSION = '1.0.0';
+export const PROTOCOL_VERSION = '1.2.0';
 
 // ---------------------------------------------------------------------------
 // Typed message unions — used by the dispatch layer.
@@ -383,7 +451,9 @@ export type AnyClientMessage =
   | { type: ClientMessage.Chat; data: { text: string } }
   | { type: ClientMessage.Input; data: InputMsg }
   | { type: ClientMessage.Pong; data: { time: number } }
-  | { type: ClientMessage.RequestRespawn; data: Record<string, never> };
+  | { type: ClientMessage.RequestRespawn; data: Record<string, never> }
+  | { type: ClientMessage.Purchase; data: PurchaseMsg }
+  | { type: ClientMessage.Interact; data: InteractMsg };
 
 export type AnyServerMessage =
   | { type: ServerMessage.Welcome; data: WelcomeMsg }
@@ -397,7 +467,8 @@ export type AnyServerMessage =
   | { type: ServerMessage.Chat; data: ChatMsg }
   | { type: ServerMessage.Ping; data: { time: number } }
   | { type: ServerMessage.Correction; data: CorrectionMsg }
-  | { type: ServerMessage.MatchOver; data: MatchOverMsg };
+  | { type: ServerMessage.MatchOver; data: MatchOverMsg }
+  | { type: ServerMessage.SurvivalState; data: SurvivalStateMsg };
 
 /**
  * The codec contract. Implemented once in shared/codec.ts by netcode-core and

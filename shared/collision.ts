@@ -83,6 +83,14 @@ export interface CollisionWorld {
   readonly boxes: readonly ColliderBox[];
   readonly brushes: readonly Brush[];
 
+  /**
+   * Playable volume and sea level for THIS map. Sundeck's singleton carries the
+   * mapdata constants; other maps (SURVIVAL's Leviathan) supply their own, so
+   * `isOutOfBounds` no longer has to read module-level Sundeck constants.
+   */
+  readonly bounds: { readonly min: Vec3; readonly max: Vec3 };
+  readonly waterLevel: number;
+
   // --- broadphase grid (CSR) ---
   readonly cell: number;
   readonly gminX: number;
@@ -187,7 +195,11 @@ function makeBox(brush: Brush): ColliderBox {
   };
 }
 
-function buildWorld(brushes: readonly Brush[]): CollisionWorld {
+function buildWorld(
+  brushes: readonly Brush[],
+  bounds: { min: Vec3; max: Vec3 } = WORLD_BOUNDS,
+  waterLevel: number = WATER_LEVEL,
+): CollisionWorld {
   const boxes: ColliderBox[] = [];
   for (let i = 0; i < brushes.length; i++) boxes.push(makeBox(brushes[i]));
 
@@ -250,6 +262,8 @@ function buildWorld(brushes: readonly Brush[]): CollisionWorld {
   return {
     boxes,
     brushes,
+    bounds,
+    waterLevel,
     cell: CELL,
     gminX,
     gminZ,
@@ -269,12 +283,23 @@ function clampInt(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
-/** The one static world. Built at module load; the map never changes. */
+/** The cached Sundeck world. Built at module load; the competitive map never changes. */
 const STATIC_WORLD: CollisionWorld = buildWorld(BRUSHES);
 
-/** Contracted factory. Returns the cached static world — do not mutate it. */
-export function createCollisionWorld(): CollisionWorld {
-  return STATIC_WORLD;
+/**
+ * Contracted factory. With no arguments it returns the cached Sundeck
+ * singleton, exactly as before — every existing call site is untouched. Given
+ * a brush set (SURVIVAL's Leviathan) it builds a fresh world carrying its own
+ * bounds and water level. Callers of the multi-map form should cache the
+ * result themselves; building is O(brushes).
+ */
+export function createCollisionWorld(
+  brushes?: readonly Brush[],
+  bounds?: { min: Vec3; max: Vec3 },
+  waterLevel?: number,
+): CollisionWorld {
+  if (!brushes) return STATIC_WORLD;
+  return buildWorld(brushes, bounds ?? WORLD_BOUNDS, waterLevel ?? WATER_LEVEL);
 }
 
 // ---------------------------------------------------------------------------
@@ -547,7 +572,16 @@ function rayVsBox(
  * and also when `origin` is inside a brush.
  */
 export function raycastWorld(origin: Vec3, dir: Vec3, maxDist: number): RayHit | null {
-  const w = STATIC_WORLD;
+  return raycastWorldIn(STATIC_WORLD, origin, dir, maxDist);
+}
+
+/** World-taking variant of `raycastWorld` for multi-map callers. */
+export function raycastWorldIn(
+  w: CollisionWorld,
+  origin: Vec3,
+  dir: Vec3,
+  maxDist: number,
+): RayHit | null {
   const n = gatherRay(w, w.candRay, origin.x, origin.z, dir.x, dir.z, maxDist);
   let bestT = maxDist;
   let bestI = -1;
@@ -579,7 +613,17 @@ export function raycastWorld(origin: Vec3, dir: Vec3, maxDist: number): RayHit |
  * Used by bullet penetration. `dir` MUST be normalized.
  */
 export function raycastWorldAll(origin: Vec3, dir: Vec3, maxDist: number, max: number): RayHit[] {
-  const w = STATIC_WORLD;
+  return raycastWorldAllIn(STATIC_WORLD, origin, dir, maxDist, max);
+}
+
+/** World-taking variant of `raycastWorldAll` for multi-map callers. */
+export function raycastWorldAllIn(
+  w: CollisionWorld,
+  origin: Vec3,
+  dir: Vec3,
+  maxDist: number,
+  max: number,
+): RayHit[] {
   const out: RayHit[] = [];
   if (max <= 0) return out;
   const n = gatherRay(w, w.candRay, origin.x, origin.z, dir.x, dir.z, maxDist);
@@ -983,11 +1027,15 @@ export function capsuleSweep(
 /**
  * True when a position is outside the playable volume (in the sea, or past the
  * world box). This only REPORTS — killing the player is the server's decision.
+ *
+ * With no `world` it tests against the Sundeck singleton's volume, exactly as
+ * before; pass a world to test against that map's own bounds.
  */
-export function isOutOfBounds(pos: Vec3): boolean {
-  if (pos.y < WATER_LEVEL) return true;
-  if (pos.x < WORLD_BOUNDS.min.x || pos.x > WORLD_BOUNDS.max.x) return true;
-  if (pos.y < WORLD_BOUNDS.min.y || pos.y > WORLD_BOUNDS.max.y) return true;
-  if (pos.z < WORLD_BOUNDS.min.z || pos.z > WORLD_BOUNDS.max.z) return true;
+export function isOutOfBounds(pos: Vec3, world: CollisionWorld = STATIC_WORLD): boolean {
+  const bounds = world.bounds;
+  if (pos.y < world.waterLevel) return true;
+  if (pos.x < bounds.min.x || pos.x > bounds.max.x) return true;
+  if (pos.y < bounds.min.y || pos.y > bounds.max.y) return true;
+  if (pos.z < bounds.min.z || pos.z > bounds.max.z) return true;
   return false;
 }

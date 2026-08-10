@@ -83,6 +83,14 @@ interface PlayerFrame {
   onGround: boolean;
   alive: boolean;
   fired: boolean;
+  /** SURVIVAL: last stand (Flags bit 3). */
+  downed: boolean;
+  /**
+   * Ceiling on which fields this entity may replicate. 0xffff for players;
+   * zombies are limited to Position|Yaw|Flags — a bandwidth requirement, not
+   * an optimisation (24 zombies × full fields would blow the budget).
+   */
+  maskLimit: number;
 }
 
 interface FrameTable {
@@ -93,6 +101,7 @@ interface FrameTable {
 const FLAG_ON_GROUND = 1 << 0;
 const FLAG_ALIVE = 1 << 1;
 const FLAG_FIRED = 1 << 2;
+const FLAG_DOWNED = 1 << 3;
 
 function makeFrame(): PlayerFrame {
   return {
@@ -128,6 +137,8 @@ function makeFrame(): PlayerFrame {
     onGround: false,
     alive: false,
     fired: false,
+    downed: false,
+    maskLimit: 0xffff,
   };
 }
 
@@ -135,6 +146,8 @@ function makeFrame(): PlayerFrame {
 export interface ReplicationExtras {
   /** Latched by the room: true if the player fired since the last snapshot. */
   fired: boolean;
+  /** Field ceiling for this entity; absent = everything (players). */
+  maskLimit?: number;
 }
 
 /** Per-client delta bookkeeping. One of these hangs off every session. */
@@ -227,7 +240,8 @@ export class SnapshotAssembler {
     f.flags =
       (s.onGround ? FLAG_ON_GROUND : 0) |
       (s.alive ? FLAG_ALIVE : 0) |
-      (extras.fired ? FLAG_FIRED : 0);
+      (extras.fired ? FLAG_FIRED : 0) |
+      (s.downed === true ? FLAG_DOWNED : 0);
     f.health = clampByte(s.health);
     f.weapon = s.activeWeapon;
     f.adsState = s.adsState & 0x03;
@@ -254,6 +268,8 @@ export class SnapshotAssembler {
     f.onGround = s.onGround;
     f.alive = s.alive;
     f.fired = extras.fired;
+    f.downed = s.downed === true;
+    f.maskLimit = extras.maskLimit ?? 0xffff;
 
     table.players.set(s.id, f);
   }
@@ -278,7 +294,7 @@ export class SnapshotAssembler {
     let i = 0;
     for (const cur of table.players.values()) {
       const base = baseline ? baseline.players.get(cur.id) : undefined;
-      const mask = diffMask(cur, base);
+      const mask = diffMask(cur, base) & cur.maskLimit;
       // A player with nothing changed still costs 3 bytes; skipping them
       // entirely would be wrong, because their absence is how removal is
       // signalled elsewhere. 3 bytes at 20 Hz is 60 B/s per idle player.
@@ -426,6 +442,7 @@ function fillMessagePlayer(out: SnapshotPlayerExt, f: PlayerFrame, mask: number)
   out.onGround = f.onGround;
   out.alive = f.alive;
   out.firedThisTick = f.fired;
+  out.downed = f.downed;
   out.health = f.health;
   out.activeWeapon = f.weapon;
   out.adsState = f.adsState;

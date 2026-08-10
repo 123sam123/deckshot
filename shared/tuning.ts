@@ -209,6 +209,12 @@ export interface WeaponSpec {
   swapTime: number;
   /** Muzzle velocity, m/s. Above this threshold we treat shots as hitscan. */
   hitscan: boolean;
+  /**
+   * SURVIVAL (additive; reported per INTEGRATION.md rule 1): true for weapons
+   * that fire on trigger HOLD rather than a fresh pull per shot. Absent/false
+   * on the two competitive weapons, whose semi-auto feel is untouched.
+   */
+  auto?: boolean;
 }
 
 const TALON: WeaponSpec = {
@@ -285,6 +291,158 @@ const KESTREL: WeaponSpec = {
   hitscan: true,
 };
 
+// --- SURVIVAL wall buys (additive; reported per INTEGRATION.md rule 1) ------
+
+const OSPREY: WeaponSpec = {
+  id: WeaponId.Osprey,
+  name: 'Osprey 9',
+  adsTime: 0.24,
+  accuracyLockAt: 0.6,
+  cycleTime: 0.09, // ~667 rpm
+  magSize: 32,
+  reserveAmmo: 128,
+  reloadTime: 2.0,
+  reloadTimeEmpty: 2.5,
+  damage: {
+    [HitboxPart.Head]: 45,
+    [HitboxPart.Chest]: 25,
+    [HitboxPart.Stomach]: 25,
+    [HitboxPart.ArmL]: 20,
+    [HitboxPart.ArmR]: 20,
+    [HitboxPart.LegL]: 20,
+    [HitboxPart.LegR]: 20,
+  },
+  penetrationDamage: 0.35,
+  penetrationCount: 1,
+  swayAmplitude: 0.35 * DEG,
+  swayFrequency: 1.0,
+  swaySettleFactor: 0.45,
+  swaySettleTime: 0.4,
+  recoilVertical: 0.55 * DEG,
+  recoilHorizontal: 0.4 * DEG,
+  recoilRecovery: 0.14,
+  recoilPunch: 0.015,
+  hipSpreadStand: 2.6 * DEG,
+  hipSpreadCrouch: 1.9 * DEG,
+  hipSpreadMoving: 4.2 * DEG,
+  flinch: 0.7 * DEG,
+  swapTime: 0.35,
+  hitscan: true,
+  auto: true,
+};
+
+const SHRIKE: WeaponSpec = {
+  id: WeaponId.Shrike,
+  name: 'Shrike 12',
+  adsTime: 0.3,
+  accuracyLockAt: 0.6,
+  cycleTime: 0.85, // pump
+  magSize: 6,
+  reserveAmmo: 36,
+  reloadTime: 2.6,
+  reloadTimeEmpty: 3.2,
+  damage: {
+    [HitboxPart.Head]: 220,
+    [HitboxPart.Chest]: 160,
+    [HitboxPart.Stomach]: 160,
+    [HitboxPart.ArmL]: 120,
+    [HitboxPart.ArmR]: 120,
+    [HitboxPart.LegL]: 120,
+    [HitboxPart.LegR]: 120,
+  },
+  penetrationDamage: 0.25,
+  penetrationCount: 1,
+  swayAmplitude: 0.6 * DEG,
+  swayFrequency: 0.7,
+  swaySettleFactor: 0.4,
+  swaySettleTime: 0.5,
+  recoilVertical: 2.6 * DEG,
+  recoilHorizontal: 0.7 * DEG,
+  recoilRecovery: 0.32,
+  recoilPunch: 0.07,
+  hipSpreadStand: 4.5 * DEG,
+  hipSpreadCrouch: 3.4 * DEG,
+  hipSpreadMoving: 6.5 * DEG,
+  flinch: 1.6 * DEG,
+  swapTime: 0.45,
+  hitscan: true,
+};
+
+const CONDOR: WeaponSpec = {
+  id: WeaponId.Condor,
+  name: 'Condor MG',
+  adsTime: 0.42,
+  accuracyLockAt: 0.65,
+  cycleTime: 0.12, // 500 rpm
+  magSize: 75,
+  reserveAmmo: 225,
+  reloadTime: 4.4,
+  reloadTimeEmpty: 5.2,
+  damage: {
+    [HitboxPart.Head]: 63,
+    [HitboxPart.Chest]: 35,
+    [HitboxPart.Stomach]: 35,
+    [HitboxPart.ArmL]: 28,
+    [HitboxPart.ArmR]: 28,
+    [HitboxPart.LegL]: 28,
+    [HitboxPart.LegR]: 28,
+  },
+  penetrationDamage: 0.6,
+  penetrationCount: 2,
+  swayAmplitude: 0.8 * DEG,
+  swayFrequency: 0.8,
+  swaySettleFactor: 0.5,
+  swaySettleTime: 0.8,
+  recoilVertical: 0.8 * DEG,
+  recoilHorizontal: 0.6 * DEG,
+  recoilRecovery: 0.16,
+  recoilPunch: 0.02,
+  hipSpreadStand: 3.8 * DEG,
+  hipSpreadCrouch: 2.8 * DEG,
+  hipSpreadMoving: 6.0 * DEG,
+  flinch: 0.9 * DEG,
+  swapTime: 0.6,
+  hitscan: true,
+  auto: true,
+};
+
+const HARRIER: WeaponSpec = {
+  id: WeaponId.Harrier,
+  name: 'Harrier DMR',
+  adsTime: 0.3,
+  accuracyLockAt: 0.7,
+  cycleTime: 0.35,
+  magSize: 15,
+  reserveAmmo: 60,
+  reloadTime: 2.4,
+  reloadTimeEmpty: 2.9,
+  damage: {
+    [HitboxPart.Head]: 180,
+    [HitboxPart.Chest]: 90,
+    [HitboxPart.Stomach]: 90,
+    [HitboxPart.ArmL]: 65,
+    [HitboxPart.ArmR]: 65,
+    [HitboxPart.LegL]: 65,
+    [HitboxPart.LegR]: 65,
+  },
+  penetrationDamage: 0.6,
+  penetrationCount: 1,
+  swayAmplitude: 0.7 * DEG,
+  swayFrequency: 0.65,
+  swaySettleFactor: 0.3,
+  swaySettleTime: 0.6,
+  recoilVertical: 1.8 * DEG,
+  recoilHorizontal: 0.45 * DEG,
+  recoilRecovery: 0.26,
+  recoilPunch: 0.05,
+  hipSpreadStand: 4.8 * DEG,
+  hipSpreadCrouch: 3.2 * DEG,
+  hipSpreadMoving: 8.0 * DEG,
+  flinch: 1.4 * DEG,
+  swapTime: 0.45,
+  hitscan: true,
+};
+
 export const WEAPONS: Record<WeaponId, WeaponSpec> = {
   [WeaponId.Talon]: TALON,
   [WeaponId.Kestrel]: KESTREL,
@@ -297,6 +455,10 @@ export const WEAPONS: Record<WeaponId, WeaponSpec> = {
     cycleTime: 0.6,
     swapTime: 0.3,
   },
+  [WeaponId.Osprey]: OSPREY,
+  [WeaponId.Shrike]: SHRIKE,
+  [WeaponId.Condor]: CONDOR,
+  [WeaponId.Harrier]: HARRIER,
 };
 
 export const MELEE_RANGE = 2.2;
