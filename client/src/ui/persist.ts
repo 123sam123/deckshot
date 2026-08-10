@@ -13,6 +13,7 @@ import {
   CamoId,
   DEFAULT_LOADOUT,
   MAX_ATTACHMENTS,
+  SkinId,
   WeaponId,
 } from '../../../shared/types.js';
 import type { Loadout } from '../../../shared/types.js';
@@ -110,7 +111,12 @@ export function loadLoadout(): Loadout {
       typeof p.camo === 'number' && p.camo >= CamoId.Gunmetal && p.camo <= CamoId.Gold
         ? p.camo
         : DEFAULT_LOADOUT.camo;
-    return { primary, attachments: [atts[0], atts[1], atts[2]], camo };
+    // Loadouts stored before skins existed have no `skin` — default, don't drop.
+    const skin =
+      typeof p.skin === 'number' && Number.isInteger(p.skin) && p.skin >= SkinId.Vanguard && p.skin <= SkinId.Breacher
+        ? p.skin
+        : DEFAULT_LOADOUT.skin;
+    return { primary, attachments: [atts[0], atts[1], atts[2]], camo, skin };
   } catch {
     return fallback;
   }

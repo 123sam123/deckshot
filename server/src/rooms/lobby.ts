@@ -92,6 +92,7 @@ export function sanitizeLoadout(raw: Loadout | undefined): Loadout {
     primary: typeof raw.primary === 'number' ? raw.primary : DEFAULT_LOADOUT.primary,
     attachments: [atts[0], atts[1], atts[2]],
     camo: typeof raw.camo === 'number' ? raw.camo : DEFAULT_LOADOUT.camo,
+    skin: typeof raw.skin === 'number' ? raw.skin : DEFAULT_LOADOUT.skin,
   };
 }
 

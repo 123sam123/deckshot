@@ -26,7 +26,16 @@ import {
   type SnapshotMsg,
   type WelcomeMsg,
 } from '../shared/protocol.js';
-import { GameMode, InputButton, RoundPhase, type ClientInput } from '../shared/types.js';
+import {
+  AttachmentId,
+  CamoId,
+  GameMode,
+  InputButton,
+  RoundPhase,
+  SkinId,
+  WeaponId,
+  type ClientInput,
+} from '../shared/types.js';
 import { COUNTDOWN_TIME } from '../shared/tuning.js';
 
 let http: Server;
@@ -223,6 +232,40 @@ describe('two players, one lobby code', () => {
 
     const travelled = Math.abs(positions[positions.length - 1] - positions[0]);
     expect(travelled, 'the guest never appeared to move on the host screen').toBeGreaterThan(0.5);
+  });
+
+  it('a mid-match skin change reaches the other player without a rejoin', async () => {
+    host.clear();
+    guest.clear();
+
+    guest.send({
+      type: ClientMessage.SetLoadout,
+      data: {
+        loadout: {
+          primary: WeaponId.Talon,
+          attachments: [AttachmentId.FastDraw, AttachmentId.None, AttachmentId.None],
+          camo: CamoId.Gunmetal,
+          skin: SkinId.Fathom,
+        },
+      },
+    });
+
+    // Keep both sims ticking while we wait for the identity resend.
+    const deadline = Date.now() + 3000;
+    let seen: SkinId | undefined;
+    while (Date.now() < deadline && seen !== SkinId.Fathom) {
+      guest.sendInput({});
+      host.sendInput({});
+      await tick(16);
+      for (const m of host.messages) {
+        if (m.type !== ServerMessage.Snapshot) continue;
+        const them = (m.data as SnapshotMsg).players.find((p) => p.id === guestId) as
+          | { loadout?: { skin: SkinId } }
+          | undefined;
+        if (them?.loadout) seen = them.loadout.skin;
+      }
+    }
+    expect(seen, "the host never saw the guest's new skin").toBe(SkinId.Fathom);
   });
 
   it('reports both players on the health endpoint', async () => {

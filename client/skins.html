@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>DECKSHOT — skin preview harness</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: #05080d;
+        color: #e6edf3;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+      /* The harness sizes the canvas per shot; explicit dimensions are set from JS. */
+      #game {
+        display: block;
+        outline: none;
+      }
+      #status {
+        position: fixed;
+        left: 10px;
+        bottom: 8px;
+        font-size: 12px;
+        opacity: 0.7;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="game" style="width: 960px; height: 720px"></canvas>
+    <div id="status">skin preview harness</div>
+    <script type="module" src="/src/engine/skinsPreview.ts"></script>
+  </body>
+</html>

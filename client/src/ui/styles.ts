@@ -162,6 +162,20 @@ export const UI_CSS = `
 .ds-camo { width: 44px; height: 30px; border-radius: 5px; border: 2px solid transparent; cursor: pointer; padding: 0; }
 .ds-camo.on { border-color: var(--ui-accent); box-shadow: 0 0 0 2px rgba(59,232,200,0.3); }
 
+/* Skin cards: runtime-rendered operator portraits (see skinThumbs.ts). */
+.ds-skins { display: grid; grid-template-columns: repeat(5, minmax(96px, 1fr)); gap: 8px; }
+.ds-skin {
+  padding: 0 0 8px; border: 2px solid transparent; border-radius: 7px; overflow: hidden; cursor: pointer;
+  background: rgba(255,255,255,0.05); text-align: center; font: inherit; color: var(--ui-ink);
+  transition: transform 80ms, border-color 80ms, background 80ms;
+}
+.ds-skin:hover { transform: translateY(-2px); background: rgba(255,255,255,0.1); border-color: rgba(180,220,240,0.35); }
+.ds-skin.on { border-color: var(--ui-accent); box-shadow: 0 0 0 2px rgba(59,232,200,0.3); }
+.ds-skin img, .ds-skin .swatch { display: block; width: 100%; aspect-ratio: 10 / 13; object-fit: cover; background: #0a121b; }
+.ds-skin .n { margin-top: 7px; font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+.ds-skin.on .n { color: var(--ui-accent); }
+.ds-skin .r { margin-top: 1px; font-size: 9.5px; color: var(--ui-dim); letter-spacing: 0.05em; }
+
 /* ------------------------------------------------------------------ HUD */
 .ds-hud { position: absolute; inset: 0; pointer-events: none; }
 .ds-hud-text { text-shadow: var(--ui-shadow); }
