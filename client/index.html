@@ -30,9 +30,15 @@
         inset: 0;
         pointer-events: none;
       }
-      #ui > * {
-        pointer-events: auto;
-      }
+      /* Deliberately NO `#ui > * { pointer-events: auto }` here. `#ui > *`
+         is an ID selector (1,0,0) and beats `.ds-root` (0,1,0), so it used to
+         override the React root's own `pointer-events: none` and cover the
+         whole viewport with a click-catcher. That silently ate every click on
+         the canvas, and clicking the canvas is what requests pointer lock — so
+         the game could only ever be controlled if the one requestPointerLock()
+         fired from the spawn handler happened to be granted, with no way to
+         recover if it was not. Each UI layer sets its own pointer-events in
+         `ui/styles.ts` (.ds-screen and .ds-overlay opt in, .ds-hud stays out). */
       canvas {
         display: block;
         outline: none;
