@@ -70,6 +70,7 @@ import {
   GameMode,
   HitboxPart,
   RoundPhase,
+  SkinId,
   Stance,
   TeamId,
   WeaponId,
@@ -398,6 +399,7 @@ function writeLoadout(w: ByteWriter, l: Loadout | undefined): void {
   w.u8(a[1] ?? AttachmentId.None);
   w.u8(a[2] ?? AttachmentId.None);
   w.u8(l ? l.camo : CamoId.Gunmetal);
+  w.u8(l ? (l.skin ?? SkinId.Vanguard) : SkinId.Vanguard);
 }
 
 function readLoadout(r: ByteReader): Loadout {
@@ -406,7 +408,8 @@ function readLoadout(r: ByteReader): Loadout {
   const a1 = clampAttachment(r.u8());
   const a2 = clampAttachment(r.u8());
   const camo = clampEnum(r.u8(), CamoId.Gunmetal, CamoId.Gold) as CamoId;
-  return { primary, attachments: [a0, a1, a2], camo };
+  const skin = clampEnum(r.u8(), SkinId.Vanguard, SkinId.Breacher) as SkinId;
+  return { primary, attachments: [a0, a1, a2], camo, skin };
 }
 
 /**

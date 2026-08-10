@@ -62,6 +62,13 @@ const net = new NetClient({
   },
 });
 
+// Dev-only debug handle: lets tooling (screenshot drivers, console poking)
+// read positions and aim the camera without going through pointer lock.
+// Stripped from production builds by the DEV guard.
+if (import.meta.env.DEV) {
+  (window as unknown as { __deckshot?: unknown }).__deckshot = { net, controller };
+}
+
 // ---------------------------------------------------------------------------
 // Camera state
 // ---------------------------------------------------------------------------
@@ -301,7 +308,10 @@ function frame(now: number): void {
       loadout: r.loadout ?? weapons.loadout,
     });
   }
-  avatars.sync(avatarStates);
+  avatars.sync(avatarStates, {
+    localTeam: remotes.get(localId)?.team ?? TeamId.FFA,
+    cameraPos: camPos,
+  });
 
   // --- audio ---------------------------------------------------------------
   Audio.setListener(camPos, camForward, camUp);

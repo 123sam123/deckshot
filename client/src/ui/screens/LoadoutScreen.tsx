@@ -9,11 +9,13 @@
 
 import { useMemo, useState } from 'react';
 import { ATTACHMENTS, WEAPONS } from '../../../../shared/tuning.js';
-import { AttachmentId, CamoId, MAX_ATTACHMENTS, WeaponId } from '../../../../shared/types.js';
+import { AttachmentId, CamoId, MAX_ATTACHMENTS, SkinId, WeaponId } from '../../../../shared/types.js';
 import type { Loadout } from '../../../../shared/types.js';
+import { SKIN_INFO } from '../../gameplay/skins.js';
 import { baseStats, resolveStats } from '../loadoutMath.js';
 import type { ResolvedStats } from '../loadoutMath.js';
 import { saveLoadout } from '../persist.js';
+import { skinThumbnails } from '../skinThumbs.js';
 import { useUI, useUICtx } from '../store.js';
 import { click, hover } from '../util.js';
 
@@ -29,6 +31,17 @@ const ALL_ATTACHMENTS: AttachmentId[] = [
   AttachmentId.IronSightSwap,
   AttachmentId.BallisticCompensator,
 ];
+
+const SKIN_IDS: SkinId[] = [SkinId.Vanguard, SkinId.Frogman, SkinId.Commodore, SkinId.Fathom, SkinId.Breacher];
+
+/** Flat fallback swatches for the (rare) no-WebGL case — thumbs are the norm. */
+const SKIN_FALLBACK_CSS: Record<SkinId, string> = {
+  [SkinId.Vanguard]: 'linear-gradient(160deg,#4b5540,#8a7250)',
+  [SkinId.Frogman]: 'linear-gradient(160deg,#1b1f26,#0f1216)',
+  [SkinId.Commodore]: 'linear-gradient(160deg,#f2f1ea,#c9a132)',
+  [SkinId.Fathom]: 'linear-gradient(160deg,#2e5a52,#9a7b35)',
+  [SkinId.Breacher]: 'linear-gradient(160deg,#b4501e,#8d949c)',
+};
 
 const CAMOS: Array<{ id: CamoId; name: string; css: string }> = [
   { id: CamoId.Gunmetal, name: 'Gunmetal', css: 'linear-gradient(135deg,#3a4048,#20242a)' },
@@ -71,6 +84,9 @@ export function LoadoutScreen(): JSX.Element {
     saved.attachments.filter((a) => a !== AttachmentId.None),
   );
   const [camo, setCamo] = useState<CamoId>(saved.camo);
+  const [skin, setSkin] = useState<SkinId>(saved.skin);
+  // Real renders of the in-game materials + gear, built once per session.
+  const thumbs = useMemo(() => skinThumbnails(), []);
 
   const stats = useMemo(() => resolveStats(primary, atts), [primary, atts]);
   const base = useMemo(() => baseStats(primary), [primary]);
@@ -90,6 +106,7 @@ export function LoadoutScreen(): JSX.Element {
       primary,
       attachments: [padded[0], padded[1], padded[2]],
       camo,
+      skin,
     };
     store.patch({ loadout });
     saveLoadout(loadout);
@@ -208,6 +225,33 @@ export function LoadoutScreen(): JSX.Element {
               ))}
             </div>
           </div>
+        </div>
+
+        <label className="ds-label">Skin</label>
+        <div className="ds-skins">
+          {SKIN_IDS.map((id) => {
+            const info = SKIN_INFO[id];
+            return (
+              <button
+                key={id}
+                className={`ds-skin${skin === id ? ' on' : ''}`}
+                title={info.blurb}
+                onMouseEnter={hover}
+                onClick={() => {
+                  click();
+                  setSkin(id);
+                }}
+              >
+                {thumbs ? (
+                  <img src={thumbs[id]} alt={info.name} draggable={false} />
+                ) : (
+                  <div className="swatch" style={{ background: SKIN_FALLBACK_CSS[id] }} />
+                )}
+                <div className="n">{info.name}</div>
+                <div className="r">{info.role}</div>
+              </button>
+            );
+          })}
         </div>
 
         <div className="ds-row" style={{ marginTop: 20, justifyContent: 'flex-end' }}>

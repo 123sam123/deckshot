@@ -119,7 +119,7 @@ function makeFrame(): PlayerFrame {
     identityKey: '',
     name: '',
     team: 0 as TeamId,
-    loadout: { primary: 0, attachments: [0, 0, 0], camo: 0 } as Loadout,
+    loadout: { primary: 0, attachments: [0, 0, 0], camo: 0, skin: 0 } as Loadout,
     position: { x: 0, y: 0, z: 0 },
     velocity: { x: 0, y: 0, z: 0 },
     yawF: 0,
@@ -363,7 +363,9 @@ export class SnapshotAssembler {
 function identityKey(s: PlayerState): string {
   const l = s.loadout;
   const a = l && l.attachments ? l.attachments : [0, 0, 0];
-  return `${s.name}|${s.team}|${l ? l.primary : 0}|${a[0]},${a[1]},${a[2]}|${l ? l.camo : 0}`;
+  // skin is part of the key: a mid-match skin change must trigger an identity
+  // resend or remote clients would never see it.
+  return `${s.name}|${s.team}|${l ? l.primary : 0}|${a[0]},${a[1]},${a[2]}|${l ? l.camo : 0}|${l ? (l.skin ?? 0) : 0}`;
 }
 
 function clampByte(v: number): number {
