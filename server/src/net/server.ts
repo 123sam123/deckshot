@@ -323,6 +323,9 @@ export function createGameServer(httpServer: HttpServer, opts: GameServerOptions
 
         case ClientMessage.SetLoadout:
           registry.setLoadout(conn, msg.data.loadout);
+          // The cosmetic skin applies to the live body immediately; the rest
+          // of the loadout applies on next respawn as before.
+          if (session.code) rooms.get(session.code)?.room.setSkin(session.playerId, msg.data.loadout.skin);
           return;
 
         case ClientMessage.SetMatchConfig:

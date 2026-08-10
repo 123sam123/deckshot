@@ -93,6 +93,13 @@ const net = new NetClient({
   },
 });
 
+// Dev-only debug handle: lets tooling (screenshot drivers, console poking)
+// read positions and aim the camera without going through pointer lock.
+// Stripped from production builds by the DEV guard.
+if (import.meta.env.DEV) {
+  (window as unknown as { __deckshot?: unknown }).__deckshot = { net, controller };
+}
+
 // ---------------------------------------------------------------------------
 // Camera state
 // ---------------------------------------------------------------------------
@@ -206,6 +213,7 @@ net.on('spawn', (msg) => {
         primary: WeaponId.Kestrel,
         attachments: [AttachmentId.None, AttachmentId.None, AttachmentId.None],
         camo: CamoId.Gunmetal,
+        skin: ui.getLoadout().skin,
       });
     } else {
       applyLoadout(msg.loadout);
@@ -503,7 +511,10 @@ function frame(now: number): void {
       loadout: r.loadout ?? weapons.loadout,
     });
   }
-  avatars.sync(avatarStates);
+  avatars.sync(avatarStates, {
+    localTeam: remotes.get(localId)?.team ?? TeamId.FFA,
+    cameraPos: camPos,
+  });
   zombies.sync(zombieStates, camPos);
 
   // --- SURVIVAL: own downed flag, prompts, purchases -------------------------

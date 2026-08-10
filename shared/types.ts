@@ -94,17 +94,34 @@ export enum CamoId {
   Gold = 5,
 }
 
+/**
+ * Player body skins — purely cosmetic (no stat, hitbox or stance effect), and
+ * never overridden by team: friend/foe ID lives on teammate nameplates, not
+ * body colour. Definitions live client-side in `client/src/gameplay/skins.ts`.
+ */
+export enum SkinId {
+  Vanguard = 0, // boarding assaulter — mid olive (default)
+  Frogman = 1, // combat diver — near-black
+  Commodore = 2, // fleet officer — dress whites
+  Fathom = 3, // hazard diver — verdigris + brass
+  Breacher = 4, // hull breacher — burnt orange + steel
+}
+
+export const SKIN_COUNT = 5;
+
 export interface Loadout {
   primary: WeaponId;
   /** Exactly MAX_ATTACHMENTS entries; unused slots are AttachmentId.None. */
   attachments: [AttachmentId, AttachmentId, AttachmentId];
   camo: CamoId;
+  skin: SkinId;
 }
 
 export const DEFAULT_LOADOUT: Loadout = {
   primary: WeaponId.Talon,
   attachments: [AttachmentId.FastDraw, AttachmentId.None, AttachmentId.None],
   camo: CamoId.Gunmetal,
+  skin: SkinId.Vanguard,
 };
 
 // ---------------------------------------------------------------------------

@@ -387,6 +387,43 @@ angle state. Recorded rather than papered over; it needs a one-line option on
 satisfy `canFire`; rather than special-case it, the knife is a button, not a
 weapon you hold.
 
+## Player skins
+
+**Skins are free expression; team identity is nameplates.** Body colour no
+longer encodes team. Each player picks one of five operator skins
+(`SkinId`, rendered by `client/src/gameplay/skins.ts`) that is never
+overridden by team; teammates are marked by a team-coloured nameplate and
+ground rim instead, and enemies get *nothing* — an enemy nameplate drawn
+through geometry is a wallhack. In FFA nobody gets a plate. The five skins are
+spread across value AND hue (mid olive, near-black, white, teal+brass, hot
+orange) so they stay separable at 40–60m and in greyscale.
+
+**Gear must stay inside the hitbox capsule union above the waist.** The
+avatar body is built from the server's hit-test capsules, and a helmet wider
+than the head capsule creates shots that visually hit and mechanically miss.
+Flat boxes are almost never legal (corners leave the capsule) and flush
+plates are invisible (buried in the body mesh), so skin gear is built as
+capsule-profile lathe shells at ≤99.9% of the true radius, with the base body
+capsules rendered radially inset (`HEAD_INSET` 0.94, `LIMB_INSET` 0.985 —
+X/Z only, never Y). The inset errs in the safe direction: a shot that
+visually misses by 3mm and still hits is imperceptible; the reverse reads as
+broken hit detection. Only leg gear (boots, knee pads) may extend outward —
+below the waist nothing is a one-shot kill.
+
+**A mid-match skin change applies immediately; the rest of the loadout stays
+respawn-gated.** `Room.setSkin` patches only the cosmetic skin into the live
+body so remote players see it within a snapshot; weapon and attachments
+still apply at spawn time as before. The skin is part of the snapshot
+`identityKey` — without that, delta compression would never resend the
+loadout and a mid-match change would be invisible to everyone else.
+
+**Skin thumbnails in the loadout screen are runtime renders**
+(`client/src/ui/skinThumbs.ts`): a throwaway WebGL context renders the same
+materials and gear the avatar wears, once per session. No asset files, and a
+tweaked skin can never drift from its picker card. The wire format grew one
+byte (`writeLoadout`/`readLoadout`), clamped by `clampEnum` so a stale or
+hostile skin byte degrades to Vanguard instead of dropping the socket.
+
 ## SURVIVAL (co-op Zombies, ticket DECK-V85WIP)
 
 **Frozen-contract edits — reported per INTEGRATION.md rule 1.** All additive,
@@ -431,3 +468,4 @@ while crawling.
 moment they drop (no pickup entity); the four new guns borrow the two
 existing viewmodel rigs; Carpenter never drops (no repairable barriers, per
 the plan's out-of-scope list); zombie audio is not yet synthesized.
+

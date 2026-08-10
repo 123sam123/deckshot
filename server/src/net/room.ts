@@ -394,6 +394,17 @@ export class GameRoom {
     this.rebuildWeapon(p);
   }
 
+  /**
+   * Applies just the cosmetic skin to the live body, immediately. Weapon and
+   * attachments stay respawn-gated (they are gameplay); a skin is not, so a
+   * mid-match change shows up on remote screens within a snapshot.
+   */
+  setSkin(id: PlayerId, skin: Loadout['skin']): void {
+    const p = this.players.get(id);
+    if (!p) return;
+    p.state.loadout = { ...p.state.loadout, skin };
+  }
+
   setName(id: PlayerId, name: string): void {
     const p = this.players.get(id);
     if (!p) return;

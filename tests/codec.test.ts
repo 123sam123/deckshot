@@ -57,6 +57,7 @@ import {
   HitboxPart,
   InputButton,
   RoundPhase,
+  SkinId,
   Stance,
   TeamId,
   WeaponId,
@@ -78,6 +79,7 @@ const LOADOUT: Loadout = {
   primary: WeaponId.Talon,
   attachments: [AttachmentId.FastDraw, AttachmentId.FMJ, AttachmentId.Suppressor],
   camo: CamoId.Gold,
+  skin: SkinId.Fathom,
 };
 
 function bytes(buf: ArrayBuffer): string {
@@ -274,6 +276,31 @@ describe('client message round trips', () => {
     expect(roundTripClient({ type: ClientMessage.Pong, data: { time: 1234567.5 } }).data).toEqual({
       time: 1234567.5,
     });
+  });
+
+  it('every SkinId survives the loadout round trip', () => {
+    for (const skin of [SkinId.Vanguard, SkinId.Frogman, SkinId.Commodore, SkinId.Fathom, SkinId.Breacher]) {
+      const out = roundTripClient({
+        type: ClientMessage.SetLoadout,
+        data: { loadout: { ...LOADOUT, skin } },
+      }).data as { loadout: Loadout };
+      expect(out.loadout.skin).toBe(skin);
+    }
+  });
+
+  it('an out-of-range skin byte clamps to the last skin rather than throwing', () => {
+    // Simulate a stale/hostile client sending a skin id past the enum: encode
+    // a valid message, then bump the skin byte (the last loadout byte) out of
+    // range. The decoder must clamp, not throw — a garbage skin is a cosmetic
+    // problem; closing the socket over one is a gameplay problem.
+    const buf = encodeClient({ type: ClientMessage.SetLoadout, data: { loadout: LOADOUT } });
+    const view = new Uint8Array(buf);
+    view[view.length - 1] = 250;
+    const out = decodeClient(buf).data as { loadout: Loadout };
+    expect(out.loadout.skin).toBe(SkinId.Breacher);
+    view[view.length - 1] = SkinId.Vanguard;
+    const out2 = decodeClient(buf).data as { loadout: Loadout };
+    expect(out2.loadout.skin).toBe(SkinId.Vanguard);
   });
 
   it('Input carries INPUT_REDUNDANCY inputs with consecutive seqs', () => {
