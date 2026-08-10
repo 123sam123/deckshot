@@ -92,6 +92,19 @@ const LS_BINDS = 'deckshot.binds';
  */
 export const RAD_PER_COUNT = 0.0022;
 
+/**
+ * Masks over `MouseEvent.button` — 0 = left, 1 = middle, 2 = right — because
+ * `mouseButtons` below accumulates `1 << e.button`.
+ *
+ * These are NOT `MouseEvent.buttons`, whose bits are a different order entirely
+ * (1 = left, 2 = RIGHT, 4 = middle). The two look interchangeable and agree on
+ * left, which is exactly why mixing them is silent: a `buttons`-style `& 2`
+ * mask over a `button`-style accumulator reads the MIDDLE mouse button, so
+ * aim-down-sight ends up on the scroll wheel and right-click does nothing.
+ */
+const MOUSE_LEFT = 1 << 0;
+const MOUSE_RIGHT = 1 << 2;
+
 // ---------------------------------------------------------------------------
 // Controller
 // ---------------------------------------------------------------------------
@@ -253,8 +266,8 @@ export class InputController {
     }
     if (this.down.has(this.binds.zoomToggle)) buttons |= InputButton.ZoomToggle;
     if (this.down.has(this.binds.use)) buttons |= InputButton.Use;
-    if ((this.mouseButtons & 1) !== 0) buttons |= InputButton.Fire;
-    if ((this.mouseButtons & 2) !== 0) buttons |= InputButton.Ads;
+    if ((this.mouseButtons & MOUSE_LEFT) !== 0) buttons |= InputButton.Fire;
+    if ((this.mouseButtons & MOUSE_RIGHT) !== 0) buttons |= InputButton.Ads;
 
     // Nothing may be held "through" a loss of focus.
     if (!this.lockedFlag) {
