@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { GameMode, TeamId } from '../../../../shared/types.js';
 import { MIN_PLAYERS_TO_START } from '../../../../shared/tuning.js';
+import { MAX_PLAYERS_SURVIVAL, MIN_PLAYERS_SURVIVAL } from '../../../../shared/survival.js';
 import { useUI, useUICtx } from '../store.js';
 import { click, copyText, hover, inviteLink } from '../util.js';
 
@@ -33,8 +34,10 @@ export function LobbyScreen(): JSX.Element | null {
   const me = lobby.players.find((p) => p.id === localId);
   const isHost = lobby.hostId === localId;
   const isTdm = lobby.mode === GameMode.TeamDeathmatch;
+  const isSurvival = lobby.mode === GameMode.Survival;
   const limits = isTdm ? SCORE_LIMITS_TDM : SCORE_LIMITS_FFA;
   const connected = lobby.players.filter((p) => p.ping < 999).length;
+  const minPlayers = isSurvival ? MIN_PLAYERS_SURVIVAL : MIN_PLAYERS_TO_START;
 
   const doCopy = async (): Promise<void> => {
     click();
@@ -88,28 +91,51 @@ export function LobbyScreen(): JSX.Element | null {
               >
                 TDM
               </button>
+              <button
+                className={isSurvival ? 'on' : ''}
+                disabled={!isHost || lobby.players.length > MAX_PLAYERS_SURVIVAL}
+                title={
+                  lobby.players.length > MAX_PLAYERS_SURVIVAL
+                    ? 'Survival squads cap at 5'
+                    : 'Co-op zombies on the Leviathan'
+                }
+                onClick={() => {
+                  click();
+                  bridge.setMatchConfig(GameMode.Survival, 0, 0);
+                }}
+              >
+                SURVIVAL
+              </button>
             </div>
           </div>
-          <div className="ds-row">
-            <span className="ds-label" style={{ margin: 0 }}>
-              Score limit
-            </span>
-            <div className="ds-seg">
-              {limits.map((l) => (
-                <button
-                  key={l}
-                  className={lobby.scoreLimit === l ? 'on' : ''}
-                  disabled={!isHost}
-                  onClick={() => {
-                    click();
-                    bridge.setMatchConfig(lobby.mode, l, lobby.timeLimit);
-                  }}
-                >
-                  {l}
-                </button>
-              ))}
+          {!isSurvival ? (
+            <div className="ds-row">
+              <span className="ds-label" style={{ margin: 0 }}>
+                Score limit
+              </span>
+              <div className="ds-seg">
+                {limits.map((l) => (
+                  <button
+                    key={l}
+                    className={lobby.scoreLimit === l ? 'on' : ''}
+                    disabled={!isHost}
+                    onClick={() => {
+                      click();
+                      bridge.setMatchConfig(lobby.mode, l, lobby.timeLimit);
+                    }}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="ds-row">
+              <span className="ds-label" style={{ margin: 0 }}>
+                1–5 players · survive the drowned crew · earn the Talon back
+              </span>
+            </div>
+          )}
         </div>
         {!isHost ? (
           <p className="ds-code-hint" style={{ textAlign: 'left', marginTop: 4 }}>
@@ -150,8 +176,8 @@ export function LobbyScreen(): JSX.Element | null {
         <p className="ds-code-hint" style={{ margin: '10px 0' }}>
           {lobby.inProgress
             ? 'Match in progress — you will drop straight in'
-            : connected < MIN_PLAYERS_TO_START
-              ? `Waiting for players — ${connected}/${MIN_PLAYERS_TO_START} minimum`
+            : connected < minPlayers
+              ? `Waiting for players — ${connected}/${minPlayers} minimum`
               : 'Match starts when everyone is ready'}
         </p>
 

@@ -18,7 +18,8 @@
  */
 
 import { ScopeZoom } from './controller.js';
-import type { CorrectionMsg, SnapshotPlayer } from '../../../shared/protocol.js';
+import type { CorrectionMsg, SnapshotPlayer, SurvivalStateMsg } from '../../../shared/protocol.js';
+import { applySurvivalWeaponMods } from '../../../shared/survival.js';
 import {
   FOV_IRONSIGHT,
   FOV_SCOPED_3_5X,
@@ -115,6 +116,11 @@ export class PredictedWeapons {
 
   private history: HistoryEntry[] = [];
 
+  // --- SURVIVAL: server-granted arsenal instead of a loadout pair ----------
+  private survivalMode = false;
+  private survivalPerks = 0;
+  private survivalForged = false;
+
   constructor(loadout: Loadout = DEFAULT_LOADOUT, controller: ScopeZoomSink | null = null) {
     this.loadoutRef = loadout;
     this.primary = resolveLoadout(loadout);
@@ -181,12 +187,70 @@ export class PredictedWeapons {
    * `applyLoadoutToState` so movement picks up the Lightweight Stock.
    */
   setLoadout(loadout: Loadout): void {
+    this.survivalMode = false;
+    this.survivalPerks = 0;
+    this.survivalForged = false;
     this.loadoutRef = loadout;
     this.primary = resolveLoadout(loadout);
     this.secondary = resolveSecondary(loadout);
     this.state = createWeaponRuntime(this.primary);
     this.history.length = 0;
     this.updateZoom(true);
+  }
+
+  // --- SURVIVAL ------------------------------------------------------------
+
+  private survivalResolve(id: WeaponId): ResolvedWeapon {
+    const base = resolveWeapon(id, []);
+    return applySurvivalWeaponMods(base, this.survivalPerks, this.survivalForged);
+  }
+
+  /**
+   * Adopt the server's SURVIVAL arsenal. Weapons are granted server-side (wall
+   * buys, the crate, last stand), so on a pair change the runtime is rebuilt;
+   * a same-pair message only ever RAISES ammo counters (refills) — the local
+   * prediction stays authoritative for rounds it just fired.
+   */
+  applySurvivalState(msg: SurvivalStateMsg): void {
+    this.survivalMode = true;
+    const perksChanged = msg.yourPerks !== this.survivalPerks || msg.yourForged !== this.survivalForged;
+    this.survivalPerks = msg.yourPerks;
+    this.survivalForged = msg.yourForged;
+
+    const held = this.state.weapon;
+    const stowed = this.state.stowedWeapon;
+    const samePair =
+      (msg.yourHeldWeapon === held && msg.yourStowedWeapon === stowed) ||
+      (msg.yourHeldWeapon === stowed && msg.yourStowedWeapon === held);
+
+    if (!samePair) {
+      this.primary = this.survivalResolve(msg.yourHeldWeapon);
+      this.secondary = this.survivalResolve(msg.yourStowedWeapon);
+      this.state = createWeaponRuntime(this.primary);
+      this.state.stowedWeapon = msg.yourStowedWeapon;
+      this.state.ammoInMag = msg.yourAmmoInMag;
+      this.state.ammoReserve = msg.yourAmmoReserve;
+      this.state.stowedMag = msg.yourStowedMag;
+      this.state.stowedReserve = msg.yourStowedReserve;
+      this.history.length = 0;
+      this.updateZoom(true);
+      return;
+    }
+
+    if (perksChanged) {
+      // Re-resolve in place: reload/ADS timings changed, the guns did not.
+      this.primary = this.survivalResolve(this.primary.id);
+      this.secondary = this.survivalResolve(this.secondary.id);
+    }
+    const mineHeld = msg.yourHeldWeapon === held;
+    const srvMag = mineHeld ? msg.yourAmmoInMag : msg.yourStowedMag;
+    const srvReserve = mineHeld ? msg.yourAmmoReserve : msg.yourStowedReserve;
+    const srvStowedMag = mineHeld ? msg.yourStowedMag : msg.yourAmmoInMag;
+    const srvStowedReserve = mineHeld ? msg.yourStowedReserve : msg.yourAmmoReserve;
+    if (srvMag > this.state.ammoInMag) this.state.ammoInMag = srvMag;
+    if (srvReserve > this.state.ammoReserve) this.state.ammoReserve = srvReserve;
+    if (srvStowedMag > this.state.stowedMag) this.state.stowedMag = srvStowedMag;
+    if (srvStowedReserve > this.state.stowedReserve) this.state.stowedReserve = srvStowedReserve;
   }
 
   /** Full reset on respawn, keeping the loadout. */

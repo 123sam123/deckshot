@@ -114,7 +114,10 @@ export function createGameServer(httpServer: HttpServer, opts: GameServerOptions
 
   function ensureRoom(lobby: Lobby): GameRoom {
     const existing = rooms.get(lobby.code);
-    if (existing) return existing.room;
+    // A host switching the lobby's mode (FFA <-> SURVIVAL) changes the map,
+    // the roster rules and the whole simulation shape: rebuild the room.
+    if (existing && existing.room.mode !== lobby.mode) closeRoom(lobby.code);
+    else if (existing) return existing.room;
 
     const room = new GameRoom({
       code: lobby.code,
@@ -347,6 +350,18 @@ export function createGameServer(httpServer: HttpServer, opts: GameServerOptions
 
         case ClientMessage.RequestRespawn:
           if (session.code) rooms.get(session.code)?.room.requestRespawn(session.playerId);
+          return;
+
+        case ClientMessage.Purchase:
+          if (session.code) {
+            rooms.get(session.code)?.room.onPurchase(session.playerId, msg.data.kind, msg.data.itemId);
+          }
+          return;
+
+        case ClientMessage.Interact:
+          if (session.code) {
+            rooms.get(session.code)?.room.onInteract(session.playerId, msg.data.target);
+          }
           return;
 
         default:

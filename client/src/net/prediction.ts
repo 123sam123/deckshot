@@ -93,7 +93,7 @@ export class Predictor {
   /** The predicted local player. Authoritative for rendering, not for truth. */
   state: MovementState;
 
-  private readonly world: CollisionWorld;
+  private world: CollisionWorld;
   private readonly ring: Frame[] = [];
   private readonly advanceWeapon: ((input: ClientInput, dt: number) => void) | undefined;
 
@@ -119,6 +119,15 @@ export class Predictor {
     for (let i = 0; i < INPUT_BUFFER_SIZE; i++) {
       this.ring.push({ seq: -1, used: false, input: emptyInput(), px: 0, py: 0, pz: 0 });
     }
+  }
+
+  /**
+   * SURVIVAL: swap the static geometry prediction runs against (Leviathan, and
+   * again whenever a zone purchase removes a door). The server made the same
+   * swap on the same information, so replays stay consistent.
+   */
+  setWorld(world: CollisionWorld): void {
+    this.world = world;
   }
 
   /** Unacknowledged inputs currently held. */

@@ -201,10 +201,13 @@ export interface BuiltBrushes {
   dispose(): void;
 }
 
-export function buildBrushes(materials?: MaterialsRegistry): BuiltBrushes {
+export function buildBrushes(
+  materials?: MaterialsRegistry,
+  brushList: readonly Brush[] = BRUSHES,
+): BuiltBrushes {
   const bucket = new GeometryBucket();
 
-  for (const brush of BRUSHES) {
+  for (const brush of brushList) {
     const m = brushMatrix(brush);
     const box = () => new THREE.BoxGeometry(brush.half.x * 2, brush.half.y * 2, brush.half.z * 2);
 

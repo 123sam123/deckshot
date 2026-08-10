@@ -27,7 +27,12 @@ import {
   type Brush,
   type SurfaceMaterial,
 } from '../../../shared/mapdata.js';
-import { raycastWorldAll } from '../../../shared/collision.js';
+import {
+  createCollisionWorld,
+  raycastWorldAll,
+  raycastWorldAllIn,
+  type CollisionWorld,
+} from '../../../shared/collision.js';
 import { viewDirection } from '../../../shared/movement.js';
 import { rayVsPlayer } from '../../../shared/hitbox.js';
 import { makeShotRng } from '../../../shared/rng.js';
@@ -167,6 +172,11 @@ export interface FireRequest {
    */
   claimedAdsState?: AdsState;
   claimedAdsProgress?: number;
+  /**
+   * Static geometry the round traces against. Absent = the Sundeck singleton,
+   * exactly as before; SURVIVAL rooms pass their own map's world.
+   */
+  world?: CollisionWorld;
 }
 
 export interface MeleeRequest {
@@ -244,12 +254,13 @@ function traceShot(
   targets: readonly PlayerState[],
   rw: ResolvedWeapon,
   maxRange: number,
+  world: CollisionWorld = createCollisionWorld(),
 ): { events: TraceEvent[]; damageScale: number[]; penetratedAt: boolean[] } {
   const events: TraceEvent[] = [];
 
   // World: only ever need the nearest (penetrationCount + 1) surfaces — the
   // round cannot survive more than that many.
-  const worldHits = raycastWorldAll(origin, dir, maxRange, Math.max(1, rw.penetrationCount + 1));
+  const worldHits = raycastWorldAllIn(world, origin, dir, maxRange, Math.max(1, rw.penetrationCount + 1));
   for (let i = 0; i < worldHits.length; i++) {
     const h = worldHits[i];
     events.push({ t: h.t, brush: h.brush, point: h.point, normal: h.normal, target: null, part: HitboxPart.Chest });
@@ -456,6 +467,7 @@ export class CombatSystem {
       targets,
       resolved,
       MAX_SHOT_RANGE,
+      req.world,
     );
 
     const hits: ShotHit[] = [];

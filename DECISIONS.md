@@ -386,3 +386,48 @@ angle state. Recorded rather than papered over; it needs a one-line option on
 `WeaponId.Knife` inherits `magSize: 0` from the pistol spec and so can never
 satisfy `canFire`; rather than special-case it, the knife is a button, not a
 weapon you hold.
+
+## SURVIVAL (co-op Zombies, ticket DECK-V85WIP)
+
+**Frozen-contract edits — reported per INTEGRATION.md rule 1.** All additive,
+none change the wire layout of an existing message:
+
+| File | Edit |
+|---|---|
+| `types.ts` | `GameMode.Survival = 2`; `InputButton.Use = 1 << 9` (u16 buttons, bits 9-15 were free); `WeaponId` 3–6 (Osprey/Shrike/Condor/Harrier); optional `PlayerState.downed/bleedout/points/perks` |
+| `protocol.ts` | `ClientMessage.Purchase = 13`, `Interact = 14`; `ServerMessage.SurvivalState = 76`; `SnapshotPlayer.downed?` riding Flags bit 3; `PROTOCOL_VERSION` → `1.2.0` (stale tabs get a version-mismatch error, by design) |
+| `tuning.ts` | Four new `WeaponSpec`s (the `WEAPONS` record is typed over `WeaponId`, so the enum addition forces them); optional `WeaponSpec.auto` for hold-to-fire |
+| `mapdata.ts` | **untouched** — Leviathan lives in `shared/leviathan.ts` behind a `MapDef` registry (`shared/maps.ts`), and `assertSymmetric()` keeps applying to Sundeck only |
+
+**Zombies are `PlayerState`-shaped entities on the existing snapshot channel,
+partitioned by id range** (players 1–199, horde 200+, `TeamId.Bravo`). That
+buys hitboxes, penetration collaterals, delta compression, interpolation and
+lag comp with no parallel entity pipeline. They replicate `Position|Yaw|Flags`
+only (~12 B) via a per-entity mask ceiling in the snapshot assembler — a
+bandwidth requirement (5 players + 24 zombies measures ~7.1 KB/s against the
+12 KB/s budget, enforced by test). Zombie health (up to 100,000) never goes on
+the wire; the u8 health field could not carry it and canon shows no bars.
+
+**The `collision.ts` multi-map refactor is additive.** Zero-arg
+`createCollisionWorld()` still returns the cached Sundeck singleton;
+`CollisionWorld` now carries its own `bounds`/`waterLevel`;
+`raycastWorld[All]In(world, ...)` variants exist beside the singleton forms;
+`isOutOfBounds(pos, world?)` defaults to Sundeck. No existing call site
+changed behaviour.
+
+**Zone doors are real brushes, removed on purchase.** Opening a zone rebuilds
+the collision world (server) and the render + prediction worlds (client) from
+`collisionBrushesFor(map, zoneMask)`; zombies path a waypoint graph whose
+edges are traversable iff the zone they ENTER is open, so "zombies only reach
+where players have paid to open" falls out of the graph.
+
+**STEADY HAND halves `adsTime` and nothing else.** `accuracyLockAt` stays
+0.82 and unmodifiable (`applySurvivalWeaponMods` spreads it through
+untouched; a test pins it). Down-state is enforced as an input mask
+(`filterDownedButtons`) applied by BOTH sides, so prediction stays honest
+while crawling.
+
+**Known survival gaps, recorded not hidden:** power-ups apply squad-wide the
+moment they drop (no pickup entity); the four new guns borrow the two
+existing viewmodel rigs; Carpenter never drops (no repairable barriers, per
+the plan's out-of-scope list); zombie audio is not yet synthesized.

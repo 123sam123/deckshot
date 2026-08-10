@@ -345,4 +345,22 @@ export const UI_CSS = `
 .ds-check input { width: 18px; height: 18px; accent-color: var(--ui-accent); }
 
 .ds-copied { color: var(--ui-green); }
+
+/* ------------------------------------------------------------- SURVIVAL */
+.ds-srv-round { position: absolute; left: 26px; bottom: 92px; display: flex; align-items: flex-end; gap: 10px; }
+.ds-srv-round .num { font-size: 44px; font-weight: 900; color: var(--ui-red); line-height: 0.9; text-shadow: var(--ui-shadow); font-variant-numeric: tabular-nums; }
+.ds-srv-round .meta { display: flex; flex-direction: column; gap: 2px; padding-bottom: 4px; }
+.ds-srv-round .wave { font-size: 11px; letter-spacing: 0.18em; color: var(--ui-dim); text-shadow: var(--ui-shadow); }
+.ds-srv-round .power { font-size: 10px; letter-spacing: 0.18em; color: var(--ui-gold); text-shadow: var(--ui-shadow); }
+.ds-srv-points { position: absolute; right: 26px; bottom: 92px; font-size: 26px; font-weight: 800; color: var(--ui-gold); text-shadow: var(--ui-shadow); font-variant-numeric: tabular-nums; }
+.ds-srv-perks { position: absolute; left: 26px; bottom: 64px; display: flex; gap: 6px; }
+.ds-srv-perks .chip { font-size: 9px; letter-spacing: 0.14em; font-weight: 800; color: var(--ui-ink); background: var(--ui-panel-soft); border: 1px solid var(--ui-line); border-radius: 3px; padding: 3px 6px; text-shadow: var(--ui-shadow); }
+.ds-srv-perks .chip.forged { color: var(--ui-gold); border-color: var(--ui-gold); }
+.ds-srv-powerups { position: absolute; left: 50%; top: 64px; transform: translateX(-50%); display: flex; gap: 12px; }
+.ds-srv-powerups .pow { font-size: 13px; font-weight: 900; letter-spacing: 0.22em; color: var(--ui-gold); text-shadow: var(--ui-shadow); animation: ds-pulse 1.1s infinite; }
+.ds-srv-prompt { position: absolute; left: 50%; bottom: 26%; transform: translateX(-50%); font-size: 14px; font-weight: 700; letter-spacing: 0.08em; color: var(--ui-ink); background: var(--ui-panel-soft); border: 1px solid var(--ui-line); border-radius: 4px; padding: 8px 14px; text-shadow: var(--ui-shadow); white-space: nowrap; }
+.ds-srv-downed { position: absolute; left: 50%; top: 34%; transform: translateX(-50%); text-align: center; }
+.ds-srv-downed .line1 { font-size: 30px; font-weight: 900; letter-spacing: 0.28em; color: var(--ui-red); text-shadow: var(--ui-shadow); animation: ds-pulse 1.1s infinite; }
+.ds-srv-downed .line2 { margin-top: 6px; font-size: 15px; font-weight: 700; color: var(--ui-ink); text-shadow: var(--ui-shadow); font-variant-numeric: tabular-nums; }
+.ds-srv-downed .line3 { margin-top: 4px; font-size: 11px; letter-spacing: 0.12em; color: var(--ui-dim); text-shadow: var(--ui-shadow); }
 `;

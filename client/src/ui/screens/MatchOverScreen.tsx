@@ -18,13 +18,19 @@ export function MatchOverScreen(): JSX.Element | null {
   const { store, bridge } = useUICtx();
   const over = useUI((s) => s.matchOver);
   const lobby = useUI((s) => s.lobby);
+  const survivalRound = useUI((s) => s.survival?.round ?? 0);
   const { remaining } = useRoundClock();
   if (!over) return null;
 
   const isTdm = lobby?.mode === GameMode.TeamDeathmatch;
+  const isSurvival = lobby?.mode === GameMode.Survival;
   let winnerText: string;
   let winnerClass = '';
-  if (isTdm) {
+  if (isSurvival) {
+    const round = Math.max(1, survivalRound);
+    winnerText = `THE SEA TAKES THE SHIP — ROUND ${round}`;
+    winnerClass = 'bravo';
+  } else if (isTdm) {
     if (over.winnerTeam === TeamId.Alpha) {
       winnerText = 'ALPHA WINS';
       winnerClass = 'alpha';

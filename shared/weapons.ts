@@ -758,7 +758,10 @@ export function advanceWeapon(
   let kickYaw = 0;
   let kickPunch = 0;
 
-  if (pressed(InputButton.Fire)) {
+  // SURVIVAL's automatic weapons fire on trigger HOLD; the two competitive
+  // weapons keep their rising-edge-only semi-auto feel (`auto` is unset).
+  const wantFire = rw.auto === true ? hasButton(buttons, InputButton.Fire) : pressed(InputButton.Fire);
+  if (wantFire) {
     if (canFire(ns, rw)) {
       ns.ammoInMag -= 1;
       ns.action = WeaponAction.Cycling;
@@ -774,7 +777,9 @@ export function advanceWeapon(
       kickPitch = rw.recoilVertical;
       kickYaw = sign * rw.recoilHorizontal * mag;
       kickPunch = rw.recoilPunch;
-    } else if (ns.ammoInMag <= 0 && isIdle(ns) && rw.magSize > 0) {
+    } else if (pressed(InputButton.Fire) && ns.ammoInMag <= 0 && isIdle(ns) && rw.magSize > 0) {
+      // Dry-fire clicks only on a fresh pull, even for automatics — a held
+      // empty trigger must not click sixty times a second.
       ns.dryFiredThisTick = true;
     }
   }

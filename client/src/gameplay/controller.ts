@@ -53,6 +53,8 @@ export interface KeyBinds {
   melee: string;
   /** Held to select the secondary zoom level of Variable Zoom. */
   zoomToggle: string;
+  /** SURVIVAL: buy, flip the generator, hold to revive. */
+  use: string;
 }
 
 export const DEFAULT_BINDS: KeyBinds = {
@@ -70,6 +72,7 @@ export const DEFAULT_BINDS: KeyBinds = {
   swap: 'KeyQ',
   melee: 'KeyV',
   zoomToggle: 'KeyB',
+  use: 'KeyF',
 };
 
 /** Scope zoom level, used only to scale mouse sensitivity while aiming. */
@@ -249,6 +252,7 @@ export class InputController {
       buttons |= InputButton.SwapWeapon;
     }
     if (this.down.has(this.binds.zoomToggle)) buttons |= InputButton.ZoomToggle;
+    if (this.down.has(this.binds.use)) buttons |= InputButton.Use;
     if ((this.mouseButtons & 1) !== 0) buttons |= InputButton.Fire;
     if ((this.mouseButtons & 2) !== 0) buttons |= InputButton.Ads;
 

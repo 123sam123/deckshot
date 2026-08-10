@@ -22,6 +22,7 @@ import { SNAPSHOT_ALL_FIELDS } from '../shared/codec.js';
 import { SnapshotField } from '../shared/protocol.js';
 import {
   DEFAULT_LOADOUT,
+  GameMode,
   InputButton,
   Stance,
   TeamId,
@@ -777,6 +778,55 @@ describe('delta compression and bandwidth', () => {
         `(budget ${(BANDWIDTH_TARGET_BPS / 1024).toFixed(0)} KB/s)`
     );
 
+    expect(worst).toBeLessThan(BANDWIDTH_TARGET_BPS);
+  });
+
+  it('a 5-player SURVIVAL room with a full 24-zombie horde stays under budget', () => {
+    // The zombie field-mask reduction is a REQUIREMENT: 24 extra entities at
+    // full replication would blow the 12 KB/s budget on their own.
+    const seconds = 5;
+    const count = 5;
+    const room = new GameRoom({ code: 'BWZ1', mode: GameMode.Survival, autoRespawn: true });
+    const conns: CaptureConnection[] = [];
+    for (let i = 0; i < count; i++) {
+      const conn = new CaptureConnection(100 + i);
+      conns.push(conn);
+      room.addPlayer({ id: i + 1, name: `squad-${i}`, team: TeamId.Alpha, conn });
+    }
+    // Force the horde to its cap immediately; the director keeps it topped up
+    // and every zombie moves toward the squad every tick — the worst case.
+    const director = room.survival!;
+    for (let i = 0; i < 24; i++) director.horde.spawn(i, 1, 100_000, 3, []);
+    expect(director.horde.aliveCount).toBeGreaterThanOrEqual(24);
+
+    const ticks = Math.round(seconds * TICK_RATE);
+    const seqs = new Array(count).fill(0);
+    const ackTicks = new Array(count).fill(0);
+    for (let t = 1; t <= ticks; t++) {
+      for (let i = 0; i < count; i++) {
+        const seq = seqs[i]++;
+        const inp = input(seq, {
+          moveZ: 1,
+          moveX: Math.sin((t + i * 7) * 0.05) > 0 ? 1 : -1,
+          yaw: Math.sin((t + i * 11) * 0.02) * Math.PI,
+          buttons: t % 30 === 0 ? InputButton.Jump : 0,
+        });
+        inp.tick = ackTicks[i];
+        room.onInput(i + 1, [inp]);
+      }
+      room.tick(t, t * TICK_MS);
+      for (let i = 0; i < count; i++) {
+        const last = conns[i].snapshots[conns[i].snapshots.length - 1];
+        if (last) ackTicks[i] = last.tick;
+      }
+    }
+
+    let worst = 0;
+    for (const conn of conns) worst = Math.max(worst, conn.bytes / seconds);
+    console.log(
+      `[bandwidth] SURVIVAL 5 players + ${director.horde.aliveCount} zombies: ` +
+        `worst ${(worst / 1024).toFixed(2)} KB/s (budget ${(BANDWIDTH_TARGET_BPS / 1024).toFixed(0)} KB/s)`
+    );
     expect(worst).toBeLessThan(BANDWIDTH_TARGET_BPS);
   });
 

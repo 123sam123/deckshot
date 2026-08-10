@@ -24,6 +24,7 @@ import type {
   MatchOverMsg,
   RoundStateMsg,
   ScoreboardEntry,
+  SurvivalStateMsg,
 } from '../../../shared/protocol.js';
 import type { Loadout, PlayerId } from '../../../shared/types.js';
 import { App } from './App.js';
@@ -85,6 +86,10 @@ export function mountUI(root: HTMLElement, bridge: UIBridge): UIHandle {
     setLocalState: (s: LocalHudState): void => store.patch({ local: s }),
     setScoreboard: (entries: ScoreboardEntry[]): void => store.patch({ scoreboard: entries }),
     showDamageFrom: (angle: number): void => store.ingestDamage(angle),
+    onSurvivalState: (msg: SurvivalStateMsg): void => store.patch({ survival: msg }),
+    setSurvivalPrompt: (text: string | null): void => {
+      if (store.state.survivalPrompt !== text) store.patch({ survivalPrompt: text });
+    },
     reset: (): void => {
       const keep = store.state;
       store.patch({
@@ -99,6 +104,8 @@ export function mountUI(root: HTMLElement, bridge: UIBridge): UIHandle {
         chat: [],
         localId: 0,
         settings: keep.settings,
+        survival: null,
+        survivalPrompt: null,
       });
     },
     getSettings: (): UISettings => loadSettings(),

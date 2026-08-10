@@ -220,7 +220,7 @@ export interface OceanHandle {
   dispose(): void;
 }
 
-export function buildOcean(parent: THREE.Object3D): OceanHandle {
+export function buildOcean(parent: THREE.Object3D, waterLevel: number = WATER_LEVEL): OceanHandle {
   const normalTex = waterNormalTexture();
   const foamTex = foamNoiseTexture();
 
@@ -240,7 +240,7 @@ export function buildOcean(parent: THREE.Object3D): OceanHandle {
     uSkyColor: { value: new THREE.Color(0.16, 0.28, 0.5) },
     uHorizonColor: { value: new THREE.Color(0.85, 0.5, 0.28) },
     uHullHalf: { value: new THREE.Vector2(10.4, 28.6) },
-    uWaterY: { value: WATER_LEVEL },
+    uWaterY: { value: waterLevel },
     uNormalTex: { value: normalTex },
     uFoamTex: { value: foamTex },
     uMirrorTex: { value: mirrorRT.texture },
@@ -256,7 +256,7 @@ export function buildOcean(parent: THREE.Object3D): OceanHandle {
   const mesh = new THREE.Mesh(buildOceanGeometry(), material);
   mesh.name = 'ocean';
   mesh.frustumCulled = false;
-  mesh.position.set(0, WATER_LEVEL, 0);
+  mesh.position.set(0, waterLevel, 0);
   mesh.matrixAutoUpdate = true;
 
   // --- Planar reflection, rendered in onBeforeRender (Reflector technique) --
@@ -277,9 +277,9 @@ export function buildOcean(parent: THREE.Object3D): OceanHandle {
   mesh.onBeforeRender = (renderer, scene, camera) => {
     if (rendering || !(camera as THREE.PerspectiveCamera).isPerspectiveCamera) return;
 
-    mirrorPos.set(0, WATER_LEVEL, 0);
+    mirrorPos.set(0, waterLevel, 0);
     camPos.setFromMatrixPosition(camera.matrixWorld);
-    if (camPos.y <= WATER_LEVEL + 0.05) return; // underwater: keep last frame
+    if (camPos.y <= waterLevel + 0.05) return; // underwater: keep last frame
 
     rendering = true;
 
@@ -357,7 +357,7 @@ export function buildOcean(parent: THREE.Object3D): OceanHandle {
     update(dt, cameraPos) {
       uniforms.uTime.value += dt;
       // Follow the camera so the player can never reach the edge of the sea.
-      mesh.position.set(cameraPos.x, WATER_LEVEL, cameraPos.z);
+      mesh.position.set(cameraPos.x, waterLevel, cameraPos.z);
     },
     setSun(dir, color) {
       uniforms.uSunDir.value.set(dir.x, dir.y, dir.z).normalize();

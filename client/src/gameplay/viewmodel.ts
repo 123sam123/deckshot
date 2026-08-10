@@ -556,8 +556,17 @@ export function buildWeaponMesh(
   attachments: AttachmentId[]
 ): THREE.Group {
   const set = makeCamoSet(camo);
-  const rig = id === WeaponId.Kestrel ? buildKestrel(set, attachments) : buildTalon(set, attachments);
+  const rig = usesCompactRig(id) ? buildKestrel(set, attachments) : buildTalon(set, attachments);
   return rig.root;
+}
+
+/**
+ * Which procedural rig a weapon borrows. The SURVIVAL wall buys reuse the two
+ * existing rigs (compact for the SMG, long gun for the rest) rather than
+ * shipping four new models — the seam for real recipes is `buildWeaponMesh`.
+ */
+function usesCompactRig(id: WeaponId): boolean {
+  return id === WeaponId.Kestrel || id === WeaponId.Osprey;
 }
 
 // ---------------------------------------------------------------------------
@@ -720,7 +729,7 @@ interface WeaponPoses {
 }
 
 function posesFor(id: WeaponId, sightHeight: number): WeaponPoses {
-  if (id === WeaponId.Kestrel) {
+  if (usesCompactRig(id)) {
     return {
       hip: pose(0.14, -0.155, -0.32, 0.03, -0.06, 0.02),
       ads: pose(0, -sightHeight, -0.3),
@@ -848,7 +857,7 @@ export class Viewmodel {
     this.scene.remove(this.rig.root);
     disposeGroup(this.rig.root);
     const set = makeCamoSet(camo);
-    this.rig = id === WeaponId.Kestrel ? buildKestrel(set, this.attachments) : buildTalon(set, this.attachments);
+    this.rig = usesCompactRig(id) ? buildKestrel(set, this.attachments) : buildTalon(set, this.attachments);
     this.poses = posesFor(id, this.rig.sightHeight);
     this.scene.add(this.rig.root);
 
@@ -872,21 +881,24 @@ export class Viewmodel {
     // Muzzle flash (viewmodel space, world light handled in update()).
     this.flashTtl = 0.055;
 
-    if (this.weaponId === WeaponId.Talon) {
+    if (this.weaponId === WeaponId.Talon || this.weaponId === WeaponId.Shrike) {
+      // Bolt-action and pump gun share the heavy report + working-the-action beat.
       Audio.play(this.suppressed ? 'sniper_fire_suppressed' : 'sniper_fire');
-      // Bolt cycle begins a beat after the shot.
       this.boltDur = Math.max(0.35, this.spec.cycleTime * 0.8);
       this.boltT = -0.12; // small delay before the hand moves
       this.boltEventsFired = 0;
-    } else if (this.weaponId === WeaponId.Kestrel) {
+    } else if (this.weaponId === WeaponId.Harrier) {
+      Audio.play(this.suppressed ? 'sniper_fire_suppressed' : 'sniper_fire');
+      this.ejectCasingNow();
+    } else if (this.weaponId === WeaponId.Knife) {
+      Audio.play('melee_swing');
+    } else {
+      // Kestrel and the automatics (Osprey, Condor): sharp report + brass.
       Audio.play(this.suppressed ? 'pistol_fire_suppressed' : 'pistol_fire');
-      // Slide blowback handled in update via kick springs on the slide.
       if (this.rig.slide) {
         this.rig.slide.position.z = 0.03;
       }
       this.ejectCasingNow();
-    } else {
-      Audio.play('melee_swing');
     }
   }
 
