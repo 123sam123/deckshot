@@ -559,6 +559,28 @@ export class ZombiesDirector {
         r.dirty = true;
         return;
       }
+      case PurchaseKind.Ammo: {
+        if (
+          !this.nearInteractable(
+            member.state.position,
+            (i) => i.kind === InteractableKind.AmmoBox && this.zoneIsOpen(i.zone),
+          )
+        ) {
+          return;
+        }
+        // Priced off the server's own view of the held gun — the client's
+        // claimed itemId is display-only.
+        const verdict = validatePurchase({
+          ...baseCtx,
+          itemId: held,
+          heldForged: (r.forgedMask & (1 << held)) !== 0,
+        });
+        if (!verdict.ok) return;
+        r.balance -= verdict.cost;
+        this.cb.refillAmmo(member.id);
+        r.dirty = true;
+        return;
+      }
       case PurchaseKind.Box: {
         const spot = this.boxSpot();
         if (!spot || !this.zoneIsOpen(spot.zone)) return;

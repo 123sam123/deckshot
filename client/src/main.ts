@@ -260,7 +260,9 @@ net.on('hit', (msg) => {
     const dx = msg.point.x - camPos.x;
     const dz = msg.point.z - camPos.z;
     ui.showDamageFrom(Math.atan2(dx, dz) - lastYaw);
-    renderer.setDamageIntensity(1);
+    // Feed the decaying accumulator the frame loop drains — writing the
+    // renderer directly here lasted exactly one frame and never showed.
+    damageFlash = 1;
   }
 });
 
@@ -404,6 +406,11 @@ function ensureWorld(mode: GameMode | null, zoneMask: number): void {
       renderer.setFogProfile();
       horde.sync(new Map(), camPos, 0);
       prevZombieIds = new Set();
+      // A stale state message must not leak into the next match's audio
+      // diffing or prompts.
+      lastZombies = null;
+      wasDowned = false;
+      prevUseDown = false;
     }
   }
   const mask = mode === GameMode.Zombies ? zoneMask : 0;
@@ -488,6 +495,18 @@ function zombiesActionAt(pos: { x: number; y: number; z: number }): ZombiesActio
           Audio.play('box_spin');
           net.purchase(PurchaseKind.Box, 0);
         },
+      };
+    } else if (i.kind === InteractableKind.AmmoBox) {
+      const held = weapons.runtime.weapon;
+      if (held === WeaponId.Knife) continue;
+      const forged = (zs.forged & (1 << held)) !== 0;
+      const full =
+        weapons.ammoInMag >= weapons.resolved.magSize &&
+        weapons.ammoReserve >= weapons.resolved.reserveAmmo;
+      if (full) continue; // nothing to sell you
+      action = {
+        prompt: `[F] Ammo box — ${ammoCostFor(held, forged)}`,
+        send: () => net.purchase(PurchaseKind.Ammo, held),
       };
     }
     if (action) {
@@ -623,7 +642,10 @@ function frame(now: number): void {
     });
   }
   avatars.sync(avatarStates, {
-    localTeam: remotes.get(localId)?.team ?? TeamId.FFA,
+    // `remotes` never contains the local player (sample() excludes it), so
+    // the team must come from the snapshot buffer — through `remotes` it read
+    // FFA forever and teammate nameplates never rendered.
+    localTeam: net.snapshots.latest()?.players.get(localId)?.team ?? TeamId.FFA,
     cameraPos: camPos,
   });
 

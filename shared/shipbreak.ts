@@ -195,6 +195,8 @@ pocket('qd_p1', -3.85, -1.2, 26.3, 28.9, 5.2, 'x0');
 pocket('qd_p2', -11.3, -8.7, 34.15, 36.8, 5.2, 'z0');
 crate('qd_crate_a', -15.5, 31, 5.2, 1.0, 1.0, 1.0, 0.3);
 crate('qd_crate_b', -6.5, 13.8, 5.2, 0.8, 0.6, 0.8);
+// The spawn-room ammo box (the interactable sits on it).
+crate('qd_ammobox', -17.1, 30, 5.2, 0.4, 0.35, 0.5);
 
 // ---------------------------------------------------------------------------
 // Z1 — CARGO HOLD (inside the hull, floor 0.6, container maze)
@@ -313,6 +315,8 @@ crate('by_c4', 36, -6, 0, 1.2, 1.2, 1.2, 0.5);
 crate('by_c5', 2, -38, 0, 1.3, 1.3, 1.3);
 crate('by_c6', 30, -38, 0, 2.0, 1.2, 1.2, -0.15);
 crate('by_boxstand', 36, 0, 0, 0.9, 0.5, 0.6);
+// The yard ammo box against the south fence.
+crate('by_ammobox', 20, -41.3, 0, 0.4, 0.35, 0.5);
 
 // ---------------------------------------------------------------------------
 // Z5 — WORKSHOP (+ the north corridor down to the engine room, + vestibule)
@@ -434,6 +438,9 @@ const interactables: Interactable[] = [
   { kind: InteractableKind.Forge, zone: 6, pos: { x: 18, y: -2.3, z: 39.4 } },
   { kind: InteractableKind.CrateSpot, zone: 1, pos: { x: -33.5, y: 1.4, z: 30.5 }, spot: 0 },
   { kind: InteractableKind.CrateSpot, zone: 4, pos: { x: 36, y: 0.8, z: 0 }, spot: 1 },
+  // Ammo boxes: one in the spawn room, one deep in the yard.
+  { kind: InteractableKind.AmmoBox, zone: 0, pos: { x: -17.4, y: 6.2, z: 30 } },
+  { kind: InteractableKind.AmmoBox, zone: 4, pos: { x: 20, y: 1.0, z: -41.4 } },
 ];
 
 // ---------------------------------------------------------------------------

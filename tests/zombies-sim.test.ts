@@ -120,6 +120,7 @@ const TEST_MAP: MapDef = {
     { kind: InteractableKind.Forge, zone: 1, pos: { x: 0, y: 1, z: 25 } },
     { kind: InteractableKind.CrateSpot, zone: 0, pos: { x: 0, y: 0.5, z: -8 }, spot: 0 },
     { kind: InteractableKind.CrateSpot, zone: 1, pos: { x: 5, y: 0.5, z: 25 }, spot: 1 },
+    { kind: InteractableKind.AmmoBox, zone: 0, pos: { x: 9, y: 1, z: -5 } },
   ],
   zombieSpawners: [
     { zone: 0, pos: { x: 12, y: 0, z: 0 }, window: 0 },
@@ -408,6 +409,23 @@ describe('economy and purchases', () => {
     r.purchase(m, PurchaseKind.Forge, 0, 0);
     expect(r.forgedMaskOf(1) & (1 << WeaponId.Kestrel)).toBeTruthy();
     expect(r.forgedMaskOf(1) & (1 << WeaponId.Talon)).toBe(0);
+  });
+
+  it('the ammo box charges the held gun price and refills, in reach only', () => {
+    const r = h.director;
+    (r as unknown as { records: Map<number, { balance: number }> }).records.get(1)!.balance = 5000;
+    const refillsBefore = h.calls.refill.length;
+    // Out of reach: nothing happens, nothing charged.
+    m.state.position.x = -9;
+    m.state.position.z = 8;
+    r.purchase(m, PurchaseKind.Ammo, WeaponId.Kestrel, 0);
+    expect(r.balanceOf(1)).toBe(5000);
+    // At the box: the held Kestrel refills at the fallback price.
+    m.state.position.x = 9;
+    m.state.position.z = -5;
+    r.purchase(m, PurchaseKind.Ammo, WeaponId.Kestrel, 0);
+    expect(r.balanceOf(1)).toBe(5000 - 300);
+    expect(h.calls.refill.length).toBe(refillsBefore + 1);
   });
 
   it('the box rolls an offer that expires, and BoxTake collects it', () => {

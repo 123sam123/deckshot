@@ -91,6 +91,13 @@ export interface ScopeZoomSink {
 /** Above this eased ADS progress the scope is "up" for sensitivity purposes. */
 const ZOOM_ENGAGE = 0.5;
 
+/**
+ * ZOMBIES wall buys that aim over irons, not glass: their ADS keeps the
+ * ironsight FOV and full mouse sensitivity, matching their scopeless rigs.
+ * (The Harrier keeps its scope; the Talon is the game.)
+ */
+const IRON_SIGHT_WEAPONS = new Set<WeaponId>([WeaponId.Osprey, WeaponId.Shrike, WeaponId.Condor]);
+
 // ---------------------------------------------------------------------------
 // Predicted weapons
 // ---------------------------------------------------------------------------
@@ -299,7 +306,7 @@ export class PredictedWeapons {
   /** The fully-scoped FOV for the current weapon and zoom level. */
   scopedFov(): number {
     const rw = this.resolved;
-    if (rw.ironSights) return FOV_IRONSIGHT;
+    if (rw.ironSights || IRON_SIGHT_WEAPONS.has(this.state.weapon)) return FOV_IRONSIGHT;
     if (rw.variableZoom && this.state.zoomLevel === 1) return FOV_SCOPED_8X;
     return FOV_SCOPED_3_5X;
   }
@@ -313,7 +320,11 @@ export class PredictedWeapons {
   private updateZoom(force: boolean): void {
     const rw = this.resolved;
     let next = ScopeZoom.None;
-    if (this.state.adsEased >= ZOOM_ENGAGE && !rw.ironSights) {
+    if (
+      this.state.adsEased >= ZOOM_ENGAGE &&
+      !rw.ironSights &&
+      !IRON_SIGHT_WEAPONS.has(this.state.weapon)
+    ) {
       next = rw.variableZoom && this.state.zoomLevel === 1 ? ScopeZoom.X8 : ScopeZoom.X3_5;
     }
     if (!force && next === this.zoomState) return;

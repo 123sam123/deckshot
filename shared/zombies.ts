@@ -181,10 +181,12 @@ export const WALL_COSTS: Partial<Record<WeaponId, number>> = {
 
 /** Wall ammo refill is half the gun; a forged gun's ammo costs flat 4500. */
 export const FORGED_AMMO_COST = 4500;
+/** Ammo price for guns with no wall (the Kestrel), at the ammo boxes. */
+export const AMMO_FALLBACK_COST = 300;
 export function ammoCostFor(weapon: WeaponId, forged: boolean): number {
   if (forged) return FORGED_AMMO_COST;
   const wall = WALL_COSTS[weapon];
-  return wall === undefined ? 0 : Math.floor(wall / 2);
+  return wall === undefined ? AMMO_FALLBACK_COST : Math.floor(wall / 2);
 }
 
 export const BOX_COST = 950;
@@ -397,6 +399,11 @@ export enum PurchaseKind {
   Forge = 3,
   /** Spin the mystery box. itemId ignored. */
   Box = 4,
+  /**
+   * Refill everything at an ammo box. itemId = the held WeaponId, but the
+   * server prices off ITS OWN view of the arsenal, not the client's claim.
+   */
+  Ammo = 5,
 }
 
 export enum InteractTarget {
@@ -488,6 +495,13 @@ export function validatePurchase(ctx: PurchaseContext): PurchaseVerdict {
       if (ctx.boxBusy) return { ok: false, cost: BOX_COST, reason: 'busy' };
       if (ctx.points < BOX_COST) return { ok: false, cost: BOX_COST, reason: 'poor' };
       return { ok: true, cost: BOX_COST };
+    }
+    case PurchaseKind.Ammo: {
+      const weapon = ctx.itemId as WeaponId;
+      if (weapon === WeaponId.Knife) return { ok: false, cost: 0, reason: 'invalid' };
+      const cost = ammoCostFor(weapon, ctx.heldForged);
+      if (ctx.points < cost) return { ok: false, cost, reason: 'poor' };
+      return { ok: true, cost };
     }
     default:
       return { ok: false, cost: 0, reason: 'invalid' };

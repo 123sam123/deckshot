@@ -175,6 +175,18 @@ describe('purchase validator', () => {
     expect(validatePurchase(forge)).toEqual({ ok: true, cost: FORGE_COST });
     expect(validatePurchase({ ...forge, heldForged: true })).toMatchObject({ ok: false, reason: 'owned' });
   });
+
+  it('the ammo box charges half wall price, the fallback for the pistol, 4500 forged, and never sells knife ammo', () => {
+    const ammo: PurchaseContext = { ...base, kind: PurchaseKind.Ammo, itemId: WeaponId.Condor };
+    expect(validatePurchase(ammo)).toEqual({ ok: true, cost: 875 });
+    expect(validatePurchase({ ...ammo, itemId: WeaponId.Kestrel })).toEqual({ ok: true, cost: 300 });
+    expect(validatePurchase({ ...ammo, heldForged: true })).toEqual({ ok: true, cost: 4500 });
+    expect(validatePurchase({ ...ammo, itemId: WeaponId.Knife })).toMatchObject({
+      ok: false,
+      reason: 'invalid',
+    });
+    expect(validatePurchase({ ...ammo, points: 100 })).toMatchObject({ ok: false, reason: 'poor' });
+  });
 });
 
 describe('perks and the damage stack', () => {

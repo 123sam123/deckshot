@@ -95,7 +95,9 @@ break from the old mode; the killfeed itself is hidden in Zombies — canon HUD)
 
 Spending: doors (table above), wall guns (Osprey 500 / Shrike 900 / Harrier
 1200 / Talon 1400 / Condor 1750, ammo refill = half, forged ammo = 4500),
-mystery box 950, perks below, Forge 5000 **[pinned]**.
+mystery box 950, perks below, Forge 5000, and two AMMO BOXES (spawn room +
+yard) that refill whatever you hold at its half-wall price — 300 for the
+wall-less Kestrel **[pinned]**.
 
 ## 6. Perks — one machine per zone, power required, max 4, lost on down
 

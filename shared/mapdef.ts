@@ -47,6 +47,8 @@ export enum InteractableKind {
   Forge = 3,
   /** A mystery box location. */
   CrateSpot = 4,
+  /** Buy a full refill for the held weapon (half wall price). */
+  AmmoBox = 5,
 }
 
 export interface Interactable {

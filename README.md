@@ -90,7 +90,7 @@ kill, so lining two people up gets you a collateral.
 shared/     engine-free game logic — imported by BOTH the browser and the server
 client/     renderer, world, gameplay, netcode, React HUD
 server/     authoritative sim, lobby registry, WebSocket transport
-tests/      393 tests, including a real two-socket end-to-end match
+tests/      396 tests, including a real two-socket end-to-end match
 tools/      map preview harness with a collision wireframe overlay
 ```
 
@@ -103,7 +103,7 @@ lets both sides run the same simulation.
 npm test
 ```
 
-393 tests across 13 files. The interesting ones:
+396 tests across 13 files. The interesting ones:
 
 - **Determinism** — a fixed 600-input sequence produces bit-identical positions
   on replay. This is the guarantee everything else rests on.

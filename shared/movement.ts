@@ -525,6 +525,12 @@ export function applyMovement(
     }
   }
 
+  // ZOMBIES last stand: a downed player crawls, whatever the stance logic
+  // above decided (the input mask already stripped crouch, which would
+  // otherwise pop them upright). Both sides run this off the same replicated
+  // flag, so prediction stays honest.
+  if (s.downed === true) s.stance = Stance.Prone;
+
   // --- 7. Target speed -----------------------------------------------------
   const adsActive = s.adsState === AdsState.Raising || s.adsState === AdsState.Scoped;
   let targetSpeed: number;

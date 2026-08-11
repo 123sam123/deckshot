@@ -358,6 +358,10 @@ export class Predictor {
     if (has(1 << 5)) {
       s.onGround = server.onGround;
       s.alive = server.alive;
+      // ZOMBIES: last stand rides Flags bit 3; movement forces the crawl
+      // stance off this flag, so prediction must adopt it or every downed
+      // tick mispredicts the capsule height.
+      if (server.downed !== undefined) s.downed = server.downed;
     }
     if (has(1 << 6)) s.health = server.health;
     if (has(1 << 7)) s.activeWeapon = server.activeWeapon;

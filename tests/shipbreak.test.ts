@@ -184,6 +184,11 @@ describe('interactables', () => {
     expect(perks.length).toBe(5);
   });
 
+  it('two ammo boxes: spawn room and yard', () => {
+    const boxes = of(InteractableKind.AmmoBox);
+    expect(boxes.map((b) => b.zone).sort()).toEqual([0, 4]);
+  });
+
   it('power in the engine room, the Forge in the basin, box spots 0 and 1', () => {
     expect(of(InteractableKind.Generator)).toHaveLength(1);
     expect(of(InteractableKind.Generator)[0].zone).toBe(3);
