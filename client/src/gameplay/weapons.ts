@@ -18,8 +18,8 @@
  */
 
 import { ScopeZoom } from './controller.js';
-import type { CorrectionMsg, SnapshotPlayer, SurvivalStateMsg } from '../../../shared/protocol.js';
-import { applySurvivalWeaponMods } from '../../../shared/survival.js';
+import type { CorrectionMsg, SnapshotPlayer, ZombiesStateMsg } from '../../../shared/protocol.js';
+import { applyZombiesWeaponMods } from '../../../shared/zombies.js';
 import {
   FOV_IRONSIGHT,
   FOV_SCOPED_3_5X,
@@ -116,10 +116,11 @@ export class PredictedWeapons {
 
   private history: HistoryEntry[] = [];
 
-  // --- SURVIVAL: server-granted arsenal instead of a loadout pair ----------
-  private survivalMode = false;
-  private survivalPerks = 0;
-  private survivalForged = false;
+  // --- ZOMBIES: server-granted arsenal instead of a loadout pair -----------
+  private zombiesMode = false;
+  private zombiesPerks = 0;
+  /** Bit per WeaponId: the Forge upgrade is per gun, not per player. */
+  private zombiesForged = 0;
 
   constructor(loadout: Loadout = DEFAULT_LOADOUT, controller: ScopeZoomSink | null = null) {
     this.loadoutRef = loadout;
@@ -187,9 +188,9 @@ export class PredictedWeapons {
    * `applyLoadoutToState` so movement picks up the Lightweight Stock.
    */
   setLoadout(loadout: Loadout): void {
-    this.survivalMode = false;
-    this.survivalPerks = 0;
-    this.survivalForged = false;
+    this.zombiesMode = false;
+    this.zombiesPerks = 0;
+    this.zombiesForged = 0;
     this.loadoutRef = loadout;
     this.primary = resolveLoadout(loadout);
     this.secondary = resolveSecondary(loadout);
@@ -198,55 +199,56 @@ export class PredictedWeapons {
     this.updateZoom(true);
   }
 
-  // --- SURVIVAL ------------------------------------------------------------
+  // --- ZOMBIES ---------------------------------------------------------------
 
-  private survivalResolve(id: WeaponId): ResolvedWeapon {
+  private zombiesResolve(id: WeaponId): ResolvedWeapon {
     const base = resolveWeapon(id, []);
-    return applySurvivalWeaponMods(base, this.survivalPerks, this.survivalForged);
+    const forged = (this.zombiesForged & (1 << id)) !== 0;
+    return applyZombiesWeaponMods(base, this.zombiesPerks, forged);
   }
 
   /**
-   * Adopt the server's SURVIVAL arsenal. Weapons are granted server-side (wall
-   * buys, the crate, last stand), so on a pair change the runtime is rebuilt;
+   * Adopt the server's ZOMBIES arsenal. Weapons are granted server-side (wall
+   * buys, the box, last stand), so on a pair change the runtime is rebuilt;
    * a same-pair message only ever RAISES ammo counters (refills) — the local
    * prediction stays authoritative for rounds it just fired.
    */
-  applySurvivalState(msg: SurvivalStateMsg): void {
-    this.survivalMode = true;
-    const perksChanged = msg.yourPerks !== this.survivalPerks || msg.yourForged !== this.survivalForged;
-    this.survivalPerks = msg.yourPerks;
-    this.survivalForged = msg.yourForged;
+  applyZombiesState(msg: ZombiesStateMsg): void {
+    this.zombiesMode = true;
+    const perksChanged = msg.perks !== this.zombiesPerks || msg.forged !== this.zombiesForged;
+    this.zombiesPerks = msg.perks;
+    this.zombiesForged = msg.forged;
 
     const held = this.state.weapon;
     const stowed = this.state.stowedWeapon;
     const samePair =
-      (msg.yourHeldWeapon === held && msg.yourStowedWeapon === stowed) ||
-      (msg.yourHeldWeapon === stowed && msg.yourStowedWeapon === held);
+      (msg.held === held && msg.stowed === stowed) ||
+      (msg.held === stowed && msg.stowed === held);
 
     if (!samePair) {
-      this.primary = this.survivalResolve(msg.yourHeldWeapon);
-      this.secondary = this.survivalResolve(msg.yourStowedWeapon);
+      this.primary = this.zombiesResolve(msg.held);
+      this.secondary = this.zombiesResolve(msg.stowed as WeaponId);
       this.state = createWeaponRuntime(this.primary);
-      this.state.stowedWeapon = msg.yourStowedWeapon;
-      this.state.ammoInMag = msg.yourAmmoInMag;
-      this.state.ammoReserve = msg.yourAmmoReserve;
-      this.state.stowedMag = msg.yourStowedMag;
-      this.state.stowedReserve = msg.yourStowedReserve;
+      this.state.stowedWeapon = msg.stowed as WeaponId;
+      this.state.ammoInMag = msg.ammoMag;
+      this.state.ammoReserve = msg.ammoReserve;
+      this.state.stowedMag = msg.stowedMag;
+      this.state.stowedReserve = msg.stowedReserve;
       this.history.length = 0;
       this.updateZoom(true);
       return;
     }
 
     if (perksChanged) {
-      // Re-resolve in place: reload/ADS timings changed, the guns did not.
-      this.primary = this.survivalResolve(this.primary.id);
-      this.secondary = this.survivalResolve(this.secondary.id);
+      // Re-resolve in place: reload timings / magazines changed, the guns did not.
+      this.primary = this.zombiesResolve(this.primary.id);
+      this.secondary = this.zombiesResolve(this.secondary.id);
     }
-    const mineHeld = msg.yourHeldWeapon === held;
-    const srvMag = mineHeld ? msg.yourAmmoInMag : msg.yourStowedMag;
-    const srvReserve = mineHeld ? msg.yourAmmoReserve : msg.yourStowedReserve;
-    const srvStowedMag = mineHeld ? msg.yourStowedMag : msg.yourAmmoInMag;
-    const srvStowedReserve = mineHeld ? msg.yourStowedReserve : msg.yourAmmoReserve;
+    const mineHeld = msg.held === held;
+    const srvMag = mineHeld ? msg.ammoMag : msg.stowedMag;
+    const srvReserve = mineHeld ? msg.ammoReserve : msg.stowedReserve;
+    const srvStowedMag = mineHeld ? msg.stowedMag : msg.ammoMag;
+    const srvStowedReserve = mineHeld ? msg.stowedReserve : msg.ammoReserve;
     if (srvMag > this.state.ammoInMag) this.state.ammoInMag = srvMag;
     if (srvReserve > this.state.ammoReserve) this.state.ammoReserve = srvReserve;
     if (srvStowedMag > this.state.stowedMag) this.state.stowedMag = srvStowedMag;

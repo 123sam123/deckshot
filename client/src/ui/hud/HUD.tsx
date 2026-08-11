@@ -21,14 +21,14 @@ import { useRoundClock } from './hooks.js';
 import { Hitmarker } from './Hitmarker.js';
 import { Killfeed, TrickshotBanner } from './Killfeed.js';
 import { Scoreboard } from './Scoreboard.js';
-import { SurvivalHUD } from './SurvivalHUD.js';
+import { ZombiesHUD } from './ZombiesHUD.js';
 
 export function HUD(): JSX.Element {
   const local = useUI((s) => s.local);
   const lobby = useUI((s) => s.lobby);
   const { phase } = useRoundClock();
   const [boardOpen, setBoardOpen] = useState(false);
-  const isSurvival = lobby?.mode === GameMode.Survival;
+  const isZombies = lobby?.mode === GameMode.Zombies;
 
   // Tab holds the scoreboard. Key events still fire under pointer lock.
   useEffect(() => {
@@ -68,26 +68,27 @@ export function HUD(): JSX.Element {
       <Vignette health={local.alive ? local.health : MAX_HEALTH} />
       <TopBar />
       <ScoreBox />
-      <Killfeed />
+      {/* Canon zombies HUD has no killfeed — the horde has no names. */}
+      {!isZombies ? <Killfeed /> : null}
       <TrickshotBanner />
       {local.alive && !scoped && phase !== RoundPhase.Countdown ? <Crosshair /> : null}
       <Hitmarker />
       <DamageIndicators />
       {local.alive ? <HealthBar /> : null}
       {local.alive ? <AmmoBox /> : null}
-      {isSurvival ? <SurvivalHUD /> : null}
+      {isZombies ? <ZombiesHUD /> : null}
       {phase === RoundPhase.Countdown ? <Countdown /> : null}
-      {!local.alive && phase === RoundPhase.Live && !isSurvival ? <DeathOverlay /> : null}
-      {!local.alive && phase === RoundPhase.Live && isSurvival ? <SurvivalDeadNotice /> : null}
+      {!local.alive && phase === RoundPhase.Live && !isZombies ? <DeathOverlay /> : null}
+      {!local.alive && phase === RoundPhase.Live && isZombies ? <ZombiesDeadNotice /> : null}
       {boardOpen ? <Scoreboard /> : null}
     </div>
   );
 }
 
-/** SURVIVAL: no respawn button — you come back when the next round starts. */
-function SurvivalDeadNotice(): JSX.Element {
+/** ZOMBIES: no respawn button — you come back when the next round starts. */
+function ZombiesDeadNotice(): JSX.Element {
   return (
-    <div className="ds-srv-downed">
+    <div className="ds-z-downed">
       <div className="line1">DOWN AND OUT</div>
       <div className="line2">You return when the next round begins</div>
     </div>
@@ -117,14 +118,14 @@ function TopBar(): JSX.Element {
   const lobby = useUI((s) => s.lobby);
   const scoreboard = useUI((s) => s.scoreboard);
   const { remaining } = useRoundClock();
-  const survival = useUI((s) => s.survival);
+  const zombies = useUI((s) => s.zombies);
   const isTdm = lobby?.mode === GameMode.TeamDeathmatch;
   const leaderKills = scoreboard.reduce((m, e) => Math.max(m, e.kills), 0);
 
-  if (lobby?.mode === GameMode.Survival) {
+  if (lobby?.mode === GameMode.Zombies) {
     return (
       <div className="ds-topbar">
-        <span className="ds-limit">SURVIVAL{survival ? ` — ROUND ${Math.max(1, survival.round)}` : ''}</span>
+        <span className="ds-limit">ZOMBIES{zombies ? ` — ROUND ${Math.max(1, zombies.round)}` : ''}</span>
       </div>
     );
   }

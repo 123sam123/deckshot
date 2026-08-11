@@ -38,11 +38,11 @@ import {
   TDM_SCORE_LIMIT,
 } from '../../../shared/tuning.js';
 import {
-  MAX_PLAYERS_SURVIVAL,
-  MIN_PLAYERS_SURVIVAL,
-  SURVIVAL_SCORE_LIMIT,
-  SURVIVAL_TIME_LIMIT,
-} from '../../../shared/survival.js';
+  MAX_PLAYERS_ZOMBIES,
+  MIN_PLAYERS_ZOMBIES,
+  ZOMBIES_SCORE_LIMIT,
+  ZOMBIES_TIME_LIMIT,
+} from '../../../shared/zombies.js';
 import {
   AttachmentId,
   DEFAULT_LOADOUT,
@@ -64,25 +64,25 @@ const ROUND_REFRESH_MS = 1_000;
 const NAME_MAX = 16;
 
 function defaultScoreLimit(mode: GameMode): number {
-  if (mode === GameMode.Survival) return SURVIVAL_SCORE_LIMIT;
+  if (mode === GameMode.Zombies) return ZOMBIES_SCORE_LIMIT;
   return mode === GameMode.TeamDeathmatch ? TDM_SCORE_LIMIT : FFA_SCORE_LIMIT;
 }
 
 /** Clamp an arbitrary byte to a real mode. Unknown values fall back to FFA. */
 function coerceMode(mode: GameMode): GameMode {
-  return mode === GameMode.TeamDeathmatch || mode === GameMode.Survival
+  return mode === GameMode.TeamDeathmatch || mode === GameMode.Zombies
     ? mode
     : GameMode.SnipersOnlyFFA;
 }
 
-/** SURVIVAL is a 5-seat co-op squad; the competitive modes keep MAX_PLAYERS. */
+/** ZOMBIES is a 4-seat co-op squad; the competitive modes keep MAX_PLAYERS. */
 export function maxPlayersFor(mode: GameMode): number {
-  return mode === GameMode.Survival ? MAX_PLAYERS_SURVIVAL : MAX_PLAYERS;
+  return mode === GameMode.Zombies ? MAX_PLAYERS_ZOMBIES : MAX_PLAYERS;
 }
 
-/** SURVIVAL starts solo. */
+/** ZOMBIES starts solo. */
 export function minPlayersFor(mode: GameMode): number {
-  return mode === GameMode.Survival ? MIN_PLAYERS_SURVIVAL : MIN_PLAYERS_TO_START;
+  return mode === GameMode.Zombies ? MIN_PLAYERS_ZOMBIES : MIN_PLAYERS_TO_START;
 }
 
 /** Strip control characters, trim, clamp length. Empty stays empty. */
@@ -149,10 +149,10 @@ export class Lobby {
   constructor(code: LobbyCode, mode: GameMode, scoreLimit: number, timeLimit: number) {
     this.code = code;
     this.mode = coerceMode(mode);
-    if (this.mode === GameMode.Survival) {
-      // Kills and clocks must never end a SURVIVAL match — only the wipe does.
-      this.scoreLimit = SURVIVAL_SCORE_LIMIT;
-      this.timeLimit = SURVIVAL_TIME_LIMIT;
+    if (this.mode === GameMode.Zombies) {
+      // Kills and clocks must never end a ZOMBIES match — only the wipe does.
+      this.scoreLimit = ZOMBIES_SCORE_LIMIT;
+      this.timeLimit = ZOMBIES_TIME_LIMIT;
     } else {
       this.scoreLimit =
         Number.isFinite(scoreLimit) && scoreLimit > 0
@@ -312,7 +312,7 @@ export class Lobby {
 
   private allocatePlayerId(): PlayerId {
     // u8 on the wire, 0 reserved, and ids >= ZOMBIE_ID_BASE (200) belong to
-    // SURVIVAL's horde — players stay in 1..199 in every mode so the client's
+    // ZOMBIES's horde — players stay in 1..199 in every mode so the client's
     // id-range partition is unambiguous.
     for (let i = 0; i < 199; i++) {
       const candidate = ((this.nextPlayerId - 1 + i) % 199) + 1;
@@ -325,9 +325,9 @@ export class Lobby {
   }
 
   private assignTeam(): TeamId {
-    // SURVIVAL: the whole squad is Alpha; the horde is Bravo. The frozen
+    // ZOMBIES: the whole squad is Alpha; the horde is Bravo. The frozen
     // TeamId enum is reused, never extended.
-    if (this.mode === GameMode.Survival) return TeamId.Alpha;
+    if (this.mode === GameMode.Zombies) return TeamId.Alpha;
     if (this.mode !== GameMode.TeamDeathmatch) return TeamId.FFA;
     let alpha = 0;
     let bravo = 0;
@@ -365,7 +365,7 @@ export class Lobby {
   /** Reassign every member's team to fit the (possibly new) mode. */
   reassignTeams(): void {
     if (this.mode !== GameMode.TeamDeathmatch) {
-      const team = this.mode === GameMode.Survival ? TeamId.Alpha : TeamId.FFA;
+      const team = this.mode === GameMode.Zombies ? TeamId.Alpha : TeamId.FFA;
       for (const m of this.members.values()) {
         m.team = team;
         this.scoreKeeper.setTeam(m.playerId, team);
@@ -391,13 +391,13 @@ export class Lobby {
   setMatchConfig(by: PlayerId, mode: GameMode, scoreLimit: number, timeLimit: number): boolean {
     if (by !== this.hostId) return false;
     const nextMode = coerceMode(mode);
-    // A 6+ player lobby cannot become a 5-seat SURVIVAL squad.
-    if (nextMode === GameMode.Survival && this.members.size > MAX_PLAYERS_SURVIVAL) return false;
+    // A 6+ player lobby cannot become a 4-seat ZOMBIES squad.
+    if (nextMode === GameMode.Zombies && this.members.size > MAX_PLAYERS_ZOMBIES) return false;
     const modeChanged = nextMode !== this.mode;
     this.mode = nextMode;
-    if (this.mode === GameMode.Survival) {
-      this.scoreLimit = SURVIVAL_SCORE_LIMIT;
-      this.timeLimit = SURVIVAL_TIME_LIMIT;
+    if (this.mode === GameMode.Zombies) {
+      this.scoreLimit = ZOMBIES_SCORE_LIMIT;
+      this.timeLimit = ZOMBIES_TIME_LIMIT;
     } else {
       this.scoreLimit =
         Number.isFinite(scoreLimit) && scoreLimit > 0
@@ -455,7 +455,7 @@ export class Lobby {
   }
 
   /**
-   * SURVIVAL squad wipe (ScoringSink.endMatch): the sim says the match is
+   * ZOMBIES squad wipe (ScoringSink.endMatch): the sim says the match is
    * over. Uses the same Over -> Warmup path a score-limit finish takes.
    */
   endMatch(): void {

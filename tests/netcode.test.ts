@@ -781,12 +781,12 @@ describe('delta compression and bandwidth', () => {
     expect(worst).toBeLessThan(BANDWIDTH_TARGET_BPS);
   });
 
-  it('a 5-player SURVIVAL room with a full 24-zombie horde stays under budget', () => {
+  it('a 4-player ZOMBIES room with a full 24-zombie horde stays under budget', () => {
     // The zombie field-mask reduction is a REQUIREMENT: 24 extra entities at
     // full replication would blow the 12 KB/s budget on their own.
     const seconds = 5;
-    const count = 5;
-    const room = new GameRoom({ code: 'BWZ1', mode: GameMode.Survival, autoRespawn: true });
+    const count = 4;
+    const room = new GameRoom({ code: 'BWZ1', mode: GameMode.Zombies, autoRespawn: true });
     const conns: CaptureConnection[] = [];
     for (let i = 0; i < count; i++) {
       const conn = new CaptureConnection(100 + i);
@@ -795,7 +795,7 @@ describe('delta compression and bandwidth', () => {
     }
     // Force the horde to its cap immediately; the director keeps it topped up
     // and every zombie moves toward the squad every tick — the worst case.
-    const director = room.survival!;
+    const director = room.zombies!;
     for (let i = 0; i < 24; i++) director.horde.spawn(i, 1, 100_000, 3, []);
     expect(director.horde.aliveCount).toBeGreaterThanOrEqual(24);
 
@@ -824,7 +824,7 @@ describe('delta compression and bandwidth', () => {
     let worst = 0;
     for (const conn of conns) worst = Math.max(worst, conn.bytes / seconds);
     console.log(
-      `[bandwidth] SURVIVAL 5 players + ${director.horde.aliveCount} zombies: ` +
+      `[bandwidth] ZOMBIES 4 players + ${director.horde.aliveCount} zombies: ` +
         `worst ${(worst / 1024).toFixed(2)} KB/s (budget ${(BANDWIDTH_TARGET_BPS / 1024).toFixed(0)} KB/s)`
     );
     expect(worst).toBeLessThan(BANDWIDTH_TARGET_BPS);

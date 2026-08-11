@@ -83,7 +83,7 @@ interface PlayerFrame {
   onGround: boolean;
   alive: boolean;
   fired: boolean;
-  /** SURVIVAL: last stand (Flags bit 3). */
+  /** ZOMBIES: last stand (Flags bit 3). */
   downed: boolean;
   /**
    * Ceiling on which fields this entity may replicate. 0xffff for players;

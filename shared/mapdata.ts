@@ -74,6 +74,13 @@ export interface Brush {
   penetrable: boolean;
   /** Rendering hint only; never affects collision. */
   tag: BrushTag;
+  /**
+   * ZOMBIES (additive; reported per INTEGRATION.md rule 1): an invisible
+   * barrier that collides with PLAYERS ONLY — never rendered, ignored by
+   * zombie locomotion. Used for window openings the horde climbs through.
+   * Author these penetrable so bullets pass. Absent = ordinary brush.
+   */
+  playersOnly?: boolean;
 }
 
 export enum BrushTag {

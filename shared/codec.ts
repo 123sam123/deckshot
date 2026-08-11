@@ -49,7 +49,8 @@ import {
   type SnapshotMsg,
   type SnapshotPlayer,
   type SpawnMsg,
-  type SurvivalStateMsg,
+  type ZombiesStateMsg,
+  type PowerupDrop,
   type WelcomeMsg,
 } from './protocol.js';
 import {
@@ -781,7 +782,7 @@ function decodeClientMessage(r: ByteReader): AnyClientMessage {
     case ClientMessage.CreateLobby:
       return {
         type,
-        data: { mode: clampEnum(r.u8(), GameMode.SnipersOnlyFFA, GameMode.Survival), scoreLimit: r.u16() },
+        data: { mode: clampEnum(r.u8(), GameMode.SnipersOnlyFFA, GameMode.Zombies), scoreLimit: r.u16() },
       };
     case ClientMessage.JoinLobby:
       return { type, data: { code: r.str() } };
@@ -795,7 +796,7 @@ function decodeClientMessage(r: ByteReader): AnyClientMessage {
       return {
         type,
         data: {
-          mode: clampEnum(r.u8(), GameMode.SnipersOnlyFFA, GameMode.Survival),
+          mode: clampEnum(r.u8(), GameMode.SnipersOnlyFFA, GameMode.Zombies),
           scoreLimit: r.u16(),
           timeLimit: r.u16(),
         },
@@ -945,33 +946,55 @@ function encodeServerMessage(w: ByteWriter, msg: AnyServerMessage): void {
       }
       return;
     }
-    case ServerMessage.SurvivalState: {
-      const d = msg.data as SurvivalStateMsg;
+    case ServerMessage.ZombiesState: {
+      const d = msg.data as ZombiesStateMsg;
       w.u16(clampEnum(Math.round(d.round), 0, 0xffff));
       w.u8(d.phase & 0xff);
       w.f32(d.timeRemaining);
       w.u16(clampEnum(Math.round(d.zombiesRemaining), 0, 0xffff));
       w.u8(d.powerOn ? 1 : 0);
       w.u16(d.zoneMask & 0xffff);
-      w.u8(d.crateZone & 0xff);
-      const ups = d.powerups ?? [];
-      const un = ups.length > 8 ? 8 : ups.length;
-      w.u8(un);
-      for (let i = 0; i < un; i++) {
-        w.u8(ups[i][0] & 0xff);
-        w.f32(ups[i][1]);
+      w.u8(d.boxSpot & 0xff);
+      const fx = d.effects ?? [];
+      const fxn = fx.length > 8 ? 8 : fx.length;
+      w.u8(fxn);
+      for (let i = 0; i < fxn; i++) {
+        w.u8(fx[i][0] & 0xff);
+        w.f32(fx[i][1]);
       }
-      w.u32(Math.max(0, Math.round(d.yourPoints)));
-      w.u8(d.yourPerks & 0xff);
-      w.f32(d.yourBleedout);
-      w.u8(d.yourForged ? 1 : 0);
-      w.u8(d.yourHeldWeapon & 0xff);
-      w.u8(d.yourStowedWeapon & 0xff);
-      w.u16(clampEnum(Math.round(d.yourAmmoInMag), 0, 0xffff));
-      w.u16(clampEnum(Math.round(d.yourAmmoReserve), 0, 0xffff));
-      w.u16(clampEnum(Math.round(d.yourStowedMag), 0, 0xffff));
-      w.u16(clampEnum(Math.round(d.yourStowedReserve), 0, 0xffff));
-      w.u8(d.yourCrateOffer & 0xff);
+      const drops = d.drops ?? [];
+      const dn = drops.length > 8 ? 8 : drops.length;
+      w.u8(dn);
+      for (let i = 0; i < dn; i++) {
+        w.u8(drops[i].id & 0xff);
+        w.u8(drops[i].kind & 0xff);
+        writePos(w, drops[i].pos);
+        w.f32(drops[i].secondsLeft);
+      }
+      // Planks: u8 count then two windows per byte (low nibble first).
+      const planks = d.planks ?? [];
+      const wn = planks.length > 32 ? 32 : planks.length;
+      w.u8(wn);
+      for (let i = 0; i < wn; i += 2) {
+        const lo = planks[i] & 0x0f;
+        const hi = i + 1 < wn ? planks[i + 1] & 0x0f : 0;
+        w.u8(lo | (hi << 4));
+      }
+      w.u32(Math.max(0, Math.round(d.points)));
+      w.u8(d.perks & 0xff);
+      w.f32(d.bleedout);
+      w.u8(d.selfRevives & 0xff);
+      w.u8(d.forged & 0xff);
+      w.u8(d.held & 0xff);
+      w.u8(d.stowed & 0xff);
+      w.u16(clampEnum(Math.round(d.ammoMag), 0, 0xffff));
+      w.u16(clampEnum(Math.round(d.ammoReserve), 0, 0xffff));
+      w.u16(clampEnum(Math.round(d.stowedMag), 0, 0xffff));
+      w.u16(clampEnum(Math.round(d.stowedReserve), 0, 0xffff));
+      w.u8(d.boxOffer & 0xff);
+      w.u8(clampEnum(Math.round(d.repairBudget), 0, 0xff));
+      w.u8(clampEnum(Math.round(d.reviveProgress * 255), 0, 255));
+      w.u8(d.beingRevived ? 1 : 0);
       return;
     }
     default: {
@@ -1043,7 +1066,7 @@ function decodeServerMessage(r: ByteReader): AnyServerMessage {
     case ServerMessage.LobbyState: {
       const code = r.str();
       const hostId = r.u8();
-      const mode = clampEnum(r.u8(), GameMode.SnipersOnlyFFA, GameMode.Survival) as GameMode;
+      const mode = clampEnum(r.u8(), GameMode.SnipersOnlyFFA, GameMode.Zombies) as GameMode;
       const scoreLimit = r.u16();
       const timeLimit = r.u16();
       const inProgress = r.u8() !== 0;
@@ -1127,29 +1150,51 @@ function decodeServerMessage(r: ByteReader): AnyServerMessage {
       const bestTrickshot = hasBest ? readKill(r) : null;
       return { type, data: { scoreboard, winnerId, winnerTeam, bestTrickshot } };
     }
-    case ServerMessage.SurvivalState: {
+    case ServerMessage.ZombiesState: {
       const round = r.u16();
       const phase = r.u8();
       const timeRemaining = r.f32();
       const zombiesRemaining = r.u16();
       const powerOn = r.u8() !== 0;
       const zoneMask = r.u16();
-      const crateZone = r.u8();
-      const un = r.u8();
-      if (un > 8) throw new DecodeError(`powerup count ${un}`);
-      const powerups: Array<[number, number]> = [];
-      for (let i = 0; i < un; i++) powerups.push([r.u8(), r.f32()]);
-      const yourPoints = r.u32();
-      const yourPerks = r.u8();
-      const yourBleedout = r.f32();
-      const yourForged = r.u8() !== 0;
-      const yourHeldWeapon = clampEnum(r.u8(), WeaponId.Talon, WeaponId.Harrier) as WeaponId;
-      const yourStowedWeapon = clampEnum(r.u8(), WeaponId.Talon, WeaponId.Harrier) as WeaponId;
-      const yourAmmoInMag = r.u16();
-      const yourAmmoReserve = r.u16();
-      const yourStowedMag = r.u16();
-      const yourStowedReserve = r.u16();
-      const yourCrateOffer = r.u8();
+      const boxSpot = r.u8();
+      const fxn = r.u8();
+      if (fxn > 8) throw new DecodeError(`effect count ${fxn}`);
+      const effects: Array<[number, number]> = [];
+      for (let i = 0; i < fxn; i++) effects.push([r.u8(), r.f32()]);
+      const dn = r.u8();
+      if (dn > 8) throw new DecodeError(`drop count ${dn}`);
+      const drops: PowerupDrop[] = [];
+      for (let i = 0; i < dn; i++) {
+        const id = r.u8();
+        const kind = r.u8();
+        const pos = readPos(r);
+        const secondsLeft = r.f32();
+        drops.push({ id, kind, pos, secondsLeft });
+      }
+      const wn = r.u8();
+      if (wn > 32) throw new DecodeError(`window count ${wn}`);
+      const planks: number[] = [];
+      for (let i = 0; i < wn; i += 2) {
+        const byte = r.u8();
+        planks.push(byte & 0x0f);
+        if (i + 1 < wn) planks.push((byte >> 4) & 0x0f);
+      }
+      const points = r.u32();
+      const perks = r.u8();
+      const bleedout = r.f32();
+      const selfRevives = r.u8();
+      const forged = r.u8();
+      const held = clampEnum(r.u8(), WeaponId.Talon, WeaponId.Harrier) as WeaponId;
+      const stowed = r.u8();
+      const ammoMag = r.u16();
+      const ammoReserve = r.u16();
+      const stowedMag = r.u16();
+      const stowedReserve = r.u16();
+      const boxOffer = r.u8();
+      const repairBudget = r.u8();
+      const reviveProgress = r.u8() / 255;
+      const beingRevived = r.u8() !== 0;
       return {
         type,
         data: {
@@ -1159,19 +1204,25 @@ function decodeServerMessage(r: ByteReader): AnyServerMessage {
           zombiesRemaining,
           powerOn,
           zoneMask,
-          crateZone,
-          powerups,
-          yourPoints,
-          yourPerks,
-          yourBleedout,
-          yourForged,
-          yourHeldWeapon,
-          yourStowedWeapon,
-          yourAmmoInMag,
-          yourAmmoReserve,
-          yourStowedMag,
-          yourStowedReserve,
-          yourCrateOffer,
+          boxSpot,
+          effects,
+          drops,
+          planks,
+          points,
+          perks,
+          bleedout,
+          selfRevives,
+          forged,
+          held,
+          stowed,
+          ammoMag,
+          ammoReserve,
+          stowedMag,
+          stowedReserve,
+          boxOffer,
+          repairBudget,
+          reviveProgress,
+          beingRevived,
         },
       };
     }

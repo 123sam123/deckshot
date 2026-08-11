@@ -7,6 +7,13 @@ about three seconds. No install, no account, no login.
 Original map, original weapons, original everything — it's *inspired by* the
 sniper lobbies of a certain 2012 shooter's boat map, not extracted from it.
 
+Three modes: **FFA** and **TDM** quickscoping on the yacht, and **ZOMBIES** —
+1–4 player round-based undead co-op on Shipbreak, a shipbreaker's yard at
+dusk. Pistol start, points for hits and kills, wall buys, boarded windows,
+doors to open, a power switch, five perk machines, a mystery box, the Forge
+(weapon upgrades), power-up drops, and last-stand revives. Solo-friendly.
+Design doc: **[ZOMBIES.md](ZOMBIES.md)**.
+
 ---
 
 ## Run it

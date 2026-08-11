@@ -535,6 +535,9 @@ export function applyMovement(
   } else if (sprinting) targetSpeed = SPEED_SPRINT;
   else targetSpeed = SPEED_WALK;
   targetSpeed = targetSpeed * wishScale;
+  // ZOMBIES: ADRENALINE perk. Both sides set speedMult from the same perk
+  // state, so prediction and server stay bit-identical (undefined = 1).
+  if (state.speedMult !== undefined) targetSpeed = targetSpeed * state.speedMult;
 
   // --- 8. Friction and acceleration ---------------------------------------
   if (s.onGround) {

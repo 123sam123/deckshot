@@ -383,21 +383,55 @@ export const UI_CSS = `
 
 .ds-copied { color: var(--ui-green); }
 
-/* ------------------------------------------------------------- SURVIVAL */
-.ds-srv-round { position: absolute; left: 26px; bottom: 92px; display: flex; align-items: flex-end; gap: 10px; }
-.ds-srv-round .num { font-size: 44px; font-weight: 900; color: var(--ui-red); line-height: 0.9; text-shadow: var(--ui-shadow); font-variant-numeric: tabular-nums; }
-.ds-srv-round .meta { display: flex; flex-direction: column; gap: 2px; padding-bottom: 4px; }
-.ds-srv-round .wave { font-size: 11px; letter-spacing: 0.18em; color: var(--ui-dim); text-shadow: var(--ui-shadow); }
-.ds-srv-round .power { font-size: 10px; letter-spacing: 0.18em; color: var(--ui-gold); text-shadow: var(--ui-shadow); }
-.ds-srv-points { position: absolute; right: 26px; bottom: 92px; font-size: 26px; font-weight: 800; color: var(--ui-gold); text-shadow: var(--ui-shadow); font-variant-numeric: tabular-nums; }
-.ds-srv-perks { position: absolute; left: 26px; bottom: 64px; display: flex; gap: 6px; }
-.ds-srv-perks .chip { font-size: 9px; letter-spacing: 0.14em; font-weight: 800; color: var(--ui-ink); background: var(--ui-panel-soft); border: 1px solid var(--ui-line); border-radius: 3px; padding: 3px 6px; text-shadow: var(--ui-shadow); }
-.ds-srv-perks .chip.forged { color: var(--ui-gold); border-color: var(--ui-gold); }
-.ds-srv-powerups { position: absolute; left: 50%; top: 64px; transform: translateX(-50%); display: flex; gap: 12px; }
-.ds-srv-powerups .pow { font-size: 13px; font-weight: 900; letter-spacing: 0.22em; color: var(--ui-gold); text-shadow: var(--ui-shadow); animation: ds-pulse 1.1s infinite; }
-.ds-srv-prompt { position: absolute; left: 50%; bottom: 26%; transform: translateX(-50%); font-size: 14px; font-weight: 700; letter-spacing: 0.08em; color: var(--ui-ink); background: var(--ui-panel-soft); border: 1px solid var(--ui-line); border-radius: 4px; padding: 8px 14px; text-shadow: var(--ui-shadow); white-space: nowrap; }
-.ds-srv-downed { position: absolute; left: 50%; top: 34%; transform: translateX(-50%); text-align: center; }
-.ds-srv-downed .line1 { font-size: 30px; font-weight: 900; letter-spacing: 0.28em; color: var(--ui-red); text-shadow: var(--ui-shadow); animation: ds-pulse 1.1s infinite; }
-.ds-srv-downed .line2 { margin-top: 6px; font-size: 15px; font-weight: 700; color: var(--ui-ink); text-shadow: var(--ui-shadow); font-variant-numeric: tabular-nums; }
-.ds-srv-downed .line3 { margin-top: 4px; font-size: 11px; letter-spacing: 0.12em; color: var(--ui-dim); text-shadow: var(--ui-shadow); }
+/* -------------------------------------------------------------- ZOMBIES */
+/* Bottom-left stack: perk chips over the points balance over the round. */
+.ds-z-left { position: absolute; left: 26px; bottom: 84px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+
+.ds-z-perks { display: flex; flex-wrap: wrap; gap: 6px; }
+.ds-z-perks .chip { font-size: 9px; letter-spacing: 0.14em; font-weight: 800; color: var(--ui-ink); background: var(--ui-panel-soft); border: 1px solid var(--ui-line); border-left-width: 3px; border-radius: 3px; padding: 3px 6px; text-shadow: var(--ui-shadow); }
+.ds-z-perks .chip.p0 { border-color: #4da3ff; } /* BULWARK */
+.ds-z-perks .chip.p1 { border-color: #ff8b4d; } /* HANDLOADER */
+.ds-z-perks .chip.p2 { border-color: #58e07c; } /* SECOND WIND */
+.ds-z-perks .chip.p3 { border-color: #c77dff; } /* ADRENALINE */
+.ds-z-perks .chip.p4 { border-color: #ff4d5a; } /* HAIR TRIGGER */
+.ds-z-perks .chip.forged { color: var(--ui-gold); border-color: var(--ui-gold); }
+
+.ds-z-points { position: relative; font-size: 26px; font-weight: 800; color: var(--ui-gold); line-height: 1; text-shadow: var(--ui-shadow); font-variant-numeric: tabular-nums; }
+.ds-z-points .delta { position: absolute; left: calc(100% + 12px); bottom: 0; font-size: 15px; font-weight: 900; color: var(--ui-gold); white-space: nowrap; text-shadow: var(--ui-shadow); font-variant-numeric: tabular-nums; animation: ds-z-rise 0.9s ease-out forwards; }
+.ds-z-points .delta.neg { color: rgba(255, 201, 60, 0.55); font-weight: 700; }
+@keyframes ds-z-rise { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-36px); opacity: 0; } }
+
+.ds-z-round { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.ds-z-round .num { font-size: clamp(44px, 6vw, 72px); font-weight: 900; color: var(--ui-red); line-height: 0.85; transform-origin: left bottom; text-shadow: 0 0 18px rgba(255, 77, 90, 0.45), var(--ui-shadow); font-variant-numeric: tabular-nums; animation: ds-z-roundpop 0.7s cubic-bezier(0.2, 2, 0.4, 1); }
+.ds-z-round.fog .num { color: #ff1f2d; text-shadow: 0 0 30px rgba(255, 10, 30, 0.9), 0 0 64px rgba(255, 10, 30, 0.5), var(--ui-shadow); }
+.ds-z-round .fogtag { font-size: 10px; font-weight: 900; letter-spacing: 0.3em; color: #ff5560; text-shadow: 0 0 14px rgba(255, 10, 30, 0.7), var(--ui-shadow); animation: ds-pulse 1.1s infinite; }
+.ds-z-round .wave { font-size: 11px; letter-spacing: 0.18em; color: var(--ui-dim); text-shadow: var(--ui-shadow); font-variant-numeric: tabular-nums; }
+.ds-z-round .power { font-size: 9px; font-weight: 900; letter-spacing: 0.18em; color: var(--ui-gold); border: 1px solid rgba(255, 201, 60, 0.5); border-radius: 3px; padding: 2px 6px; text-shadow: var(--ui-shadow); }
+@keyframes ds-z-roundpop { 0% { transform: scale(2.2); opacity: 0; } 55% { transform: scale(0.95); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+
+/* Active power-up pills, centre-top under the topbar. */
+.ds-z-effects { position: absolute; left: 50%; top: 64px; transform: translateX(-50%); display: flex; gap: 10px; }
+.ds-z-effects .fx { font-size: 12px; font-weight: 900; letter-spacing: 0.2em; color: var(--ui-gold); background: var(--ui-panel-soft); border: 1px solid rgba(255, 201, 60, 0.45); border-radius: 999px; padding: 4px 12px; text-shadow: var(--ui-shadow); font-variant-numeric: tabular-nums; }
+.ds-z-effects .fx.low { animation: ds-pulse 0.6s infinite; }
+
+/* Squadmate down callouts, stacked under the power-up pills. */
+.ds-z-callouts { position: absolute; left: 50%; top: 102px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.ds-z-callouts .callout { font-size: 12px; font-weight: 900; letter-spacing: 0.22em; color: #ffd9dc; background: rgba(60, 8, 14, 0.9); border: 1px solid var(--ui-red); border-radius: 4px; padding: 4px 12px; text-shadow: var(--ui-shadow); animation: ds-pulse 1.1s infinite; }
+
+.ds-z-prompt { position: absolute; left: 50%; bottom: 26%; transform: translateX(-50%); font-size: 14px; font-weight: 700; letter-spacing: 0.08em; color: var(--ui-ink); background: var(--ui-panel-soft); border: 1px solid var(--ui-line); border-radius: 4px; padding: 8px 14px; text-shadow: var(--ui-shadow); white-space: nowrap; }
+
+/* Revive progress ring, dead centre (the crosshair hides while using). */
+.ds-z-revive { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -58%); text-align: center; }
+.ds-z-revive svg { display: block; margin: 0 auto; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9)); }
+.ds-z-revive .track { stroke: rgba(255, 255, 255, 0.16); }
+.ds-z-revive .arc { stroke: var(--ui-green); transition: stroke-dashoffset 180ms linear; }
+.ds-z-revive .lbl { margin-top: 6px; font-size: 11px; font-weight: 900; letter-spacing: 0.3em; color: var(--ui-green); text-shadow: var(--ui-shadow); animation: ds-pulse 1.1s infinite; }
+
+/* Downed: full-width bottom banner with the draining bleedout bar. */
+.ds-z-downed { position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 0 22px; text-align: center; background: linear-gradient(180deg, rgba(60, 4, 10, 0) 0%, rgba(60, 4, 10, 0.82) 45%, rgba(40, 2, 6, 0.94) 100%); border-top: 1px solid rgba(255, 77, 90, 0.4); }
+.ds-z-downed .line1 { font-size: clamp(18px, 2.4vw, 26px); font-weight: 900; letter-spacing: 0.26em; color: var(--ui-red); text-shadow: 0 0 22px rgba(255, 77, 90, 0.6), var(--ui-shadow); animation: ds-pulse 1.1s infinite; }
+.ds-z-downed .bleed { width: min(420px, 60vw); height: 6px; margin: 10px auto 8px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(0, 0, 0, 0.5); overflow: hidden; }
+.ds-z-downed .bleed .fill { height: 100%; background: linear-gradient(90deg, #ff4d5a, #a1121e); transition: width 400ms linear; }
+.ds-z-downed .line2 { font-size: 11px; font-weight: 800; letter-spacing: 0.2em; color: var(--ui-ink); text-shadow: var(--ui-shadow); font-variant-numeric: tabular-nums; }
+.ds-z-downed .line2.wind { color: var(--ui-gold); }
 `;

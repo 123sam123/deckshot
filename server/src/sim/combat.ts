@@ -184,6 +184,8 @@ export interface MeleeRequest {
   runtime: WeaponRuntime;
   targets: readonly PlayerState[];
   now: number;
+  /** Static geometry the swing checks against. Absent = the Sundeck singleton. */
+  world?: CollisionWorld;
 }
 
 // ---------------------------------------------------------------------------
@@ -571,7 +573,9 @@ export class CombatSystem {
     }
 
     const impacts: SurfaceImpact[] = [];
-    const wall = raycastWorldAll(origin, dir, bestTarget ? bestT : MELEE_RANGE, 1);
+    const wall = req.world
+      ? raycastWorldAllIn(req.world, origin, dir, bestTarget ? bestT : MELEE_RANGE, 1)
+      : raycastWorldAll(origin, dir, bestTarget ? bestT : MELEE_RANGE, 1);
     if (wall.length > 0 && (!bestTarget || wall[0].t < bestT)) {
       impacts.push({
         point: wall[0].point,

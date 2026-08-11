@@ -72,6 +72,8 @@ export interface WeaponRuntimeView {
   firedThisTick?: boolean;
   fired?: boolean;
   shotsThisTick?: number;
+  /** Set by the weapon module on the tick a quick-melee begins. */
+  meleeThisTick?: boolean;
   /** Movement speed override from the Lightweight Stock attachment. */
   adsMoveSpeedOverride?: number;
   adsMoveSpeed?: number;
@@ -173,6 +175,11 @@ export interface SimHooks {
   weapons?: WeaponsModule;
   resolveFire?: FireResolver;
   /**
+   * Authoritative melee. Same context shape as a shot; the resolver ignores
+   * the ballistic fields. ZOMBIES is the first consumer (the knife pays 130).
+   */
+  resolveMelee?: FireResolver;
+  /**
    * Optional per-tick escape hatch, for anything the sim gains later that
    * should not require a change to this file.
    */
@@ -206,6 +213,14 @@ export function createDefaultHooks(): SimHooks & { combat: CombatSystem } {
         runtime: ctx.weaponRuntime as never,
         resolved: ctx.resolvedWeapon as never,
         input: ctx.input,
+        targets: ctx.targets,
+        now: ctx.nowSeconds,
+        world: ctx.world as never,
+      }),
+    resolveMelee: (ctx) =>
+      combat.meleeAttack({
+        attacker: ctx.shooter,
+        runtime: ctx.weaponRuntime as never,
         targets: ctx.targets,
         now: ctx.nowSeconds,
         world: ctx.world as never,

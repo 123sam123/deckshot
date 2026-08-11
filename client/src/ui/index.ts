@@ -24,7 +24,7 @@ import type {
   MatchOverMsg,
   RoundStateMsg,
   ScoreboardEntry,
-  SurvivalStateMsg,
+  ZombiesStateMsg,
 } from '../../../shared/protocol.js';
 import type { Loadout, PlayerId } from '../../../shared/types.js';
 import { App } from './App.js';
@@ -86,9 +86,14 @@ export function mountUI(root: HTMLElement, bridge: UIBridge): UIHandle {
     setLocalState: (s: LocalHudState): void => store.patch({ local: s }),
     setScoreboard: (entries: ScoreboardEntry[]): void => store.patch({ scoreboard: entries }),
     showDamageFrom: (angle: number): void => store.ingestDamage(angle),
-    onSurvivalState: (msg: SurvivalStateMsg): void => store.patch({ survival: msg }),
-    setSurvivalPrompt: (text: string | null): void => {
-      if (store.state.survivalPrompt !== text) store.patch({ survivalPrompt: text });
+    onZombiesState: (msg: ZombiesStateMsg): void => store.patch({ zombies: msg }),
+    setZombiesPrompt: (text: string | null): void => {
+      if (store.state.zombiesPrompt !== text) store.patch({ zombiesPrompt: text });
+    },
+    setZombiesDowned: (names: string[]): void => {
+      const cur = store.state.zombiesDowned;
+      if (cur.length === names.length && cur.every((n, i) => n === names[i])) return;
+      store.patch({ zombiesDowned: names });
     },
     reset: (): void => {
       const keep = store.state;
@@ -104,8 +109,9 @@ export function mountUI(root: HTMLElement, bridge: UIBridge): UIHandle {
         chat: [],
         localId: 0,
         settings: keep.settings,
-        survival: null,
-        survivalPrompt: null,
+        zombies: null,
+        zombiesPrompt: null,
+        zombiesDowned: [],
       });
     },
     getSettings: (): UISettings => loadSettings(),

@@ -12,7 +12,7 @@
 import { BRUSHES, SPAWN_POINTS, WATER_LEVEL, WORLD_BOUNDS, type Brush } from './mapdata.js';
 import { GameMode, type Vec3 } from './types.js';
 import { MapId, type Interactable, type MapDef } from './mapdef.js';
-import { LEVIATHAN } from './leviathan.js';
+import { SHIPBREAK } from './shipbreak.js';
 
 export {
   MapId,
@@ -22,6 +22,7 @@ export {
   type Zone,
   type ZoneBox,
   type ZombieSpawner,
+  type WindowDef,
 } from './mapdef.js';
 
 /** Sundeck, wrapped. The frozen mapdata is the source of truth. */
@@ -36,20 +37,23 @@ export const SUNDECK: MapDef = {
   navNodes: [],
   interactables: [],
   zombieSpawners: [],
+  windows: [],
   doorBrushIdsByZone: [],
 };
 
 export function mapForMode(mode: GameMode): MapDef {
-  return mode === GameMode.Survival ? LEVIATHAN : SUNDECK;
+  return mode === GameMode.Zombies ? SHIPBREAK : SUNDECK;
 }
 
 export function mapById(id: MapId): MapDef {
-  return id === MapId.Leviathan ? LEVIATHAN : SUNDECK;
+  return id === MapId.Shipbreak ? SHIPBREAK : SUNDECK;
 }
 
 /**
- * The brushes that collide under a given zone mask: everything except the
- * doors of OPEN zones. Competitive maps have no doors and return `brushes`.
+ * The brushes PLAYERS collide with under a given zone mask: everything except
+ * the doors of OPEN zones. Competitive maps have no doors and return
+ * `brushes`. Includes `playersOnly` window blockers — players cannot climb
+ * out of windows.
  */
 export function collisionBrushesFor(map: MapDef, zoneMask: number): readonly Brush[] {
   if (map.doorBrushIdsByZone.length === 0) return map.brushes;
@@ -60,6 +64,15 @@ export function collisionBrushesFor(map: MapDef, zoneMask: number): readonly Bru
   }
   if (removed.size === 0) return map.brushes;
   return map.brushes.filter((b) => !removed.has(b.id));
+}
+
+/**
+ * The brushes the HORDE (and bullets) collide with: the player set minus
+ * `playersOnly` blockers, so zombies climb through window openings and shots
+ * pass them without a penetration penalty.
+ */
+export function hordeBrushesFor(map: MapDef, zoneMask: number): readonly Brush[] {
+  return collisionBrushesFor(map, zoneMask).filter((b) => b.playersOnly !== true);
 }
 
 /** Zone containing a position, or -1. First matching zone in id order wins. */

@@ -135,7 +135,7 @@ export function saveLoadout(l: Loadout): void {
  */
 export function loadMode(): GameMode {
   const raw = Number(read(KEY_MODE));
-  return raw === GameMode.TeamDeathmatch || raw === GameMode.Survival
+  return raw === GameMode.TeamDeathmatch || raw === GameMode.Zombies
     ? raw
     : GameMode.SnipersOnlyFFA;
 }

@@ -69,17 +69,17 @@ import { mapForMode, type MapDef } from '../../../shared/maps.js';
 import { createCollisionWorld, type CollisionWorld, type MovementState } from '../../../shared/movement.js';
 import {
   MAX_ENTITIES,
-  applySurvivalWeaponMods,
+  applyZombiesWeaponMods,
   filterDownedButtons,
   isZombieId,
   maxHealthForPerks,
   type PurchaseKind,
   type InteractTarget,
-} from '../../../shared/survival.js';
+} from '../../../shared/zombies.js';
 import { SnapshotField } from '../../../shared/protocol.js';
 import { stepPlayerMovement } from '../sim/movement.js';
 import { ScoreKeeper } from '../sim/scoring.js';
-import { SurvivalDirector, type SquadMember } from '../sim/survival.js';
+import { ZombiesDirector, type SquadMember } from '../sim/zombies/director.js';
 import { snapPositionInPlace, snapVelocityInPlace } from '../../../shared/quantize.js';
 import type { Connection } from '../rooms/types.js';
 import { InputQueue } from './inputqueue.js';
@@ -90,6 +90,7 @@ import {
   readRuntime,
   runtimeFired,
   type FireContext,
+  type FireOutcome,
   type FireVictim,
   type SimHooks,
 } from './hooks.js';
@@ -112,7 +113,7 @@ export interface ScoringSink {
   ): KillMsg;
   recordYaw(id: PlayerId, tSeconds: number, yaw: number, onGround: boolean): void;
   readonly scoreKeeper?: ScoreKeeper;
-  /** SURVIVAL: the squad wiped; end the match now (broadcast MatchOver). */
+  /** ZOMBIES: the squad wiped; end the match now (broadcast MatchOver). */
   endMatch?(): void;
 }
 
@@ -174,12 +175,12 @@ export interface RoomPlayer {
   lastPingSentMs: number;
   suspicious: number;
   spawnCursor: number;
-  // --- SURVIVAL ---
-  /** Which weapon each resolved spec belongs to (survival ignores loadouts). */
-  survivalHeldId: WeaponId;
-  survivalStowedId: WeaponId;
+  // --- ZOMBIES ---
+  /** Which weapon each resolved spec belongs to (the mode ignores loadouts). */
+  zHeldId: WeaponId;
+  zStowedId: WeaponId;
   /** Guns stashed while downed (last stand is Kestrel-only). */
-  survivalStash: {
+  zStash: {
     runtime: unknown;
     heldId: WeaponId;
     stowedId: WeaponId;
@@ -223,14 +224,16 @@ export class GameRoom {
 
   /** The map this room simulates. Sundeck for the competitive modes. */
   private readonly mapDef: MapDef;
-  /** Non-null exactly when `mode === GameMode.Survival`. */
-  readonly survival: SurvivalDirector | null;
+  /** Non-null exactly when `mode === GameMode.Zombies`. */
+  readonly zombies: ZombiesDirector | null;
   /** Keeper identity watch: the lobby builds a fresh keeper per match start. */
   private lastKeeper: ScoreKeeper | null = null;
   private readonly squadScratch: SquadMember[] = [];
 
   /** Fire events collected during the movement pass, resolved after history. */
   private readonly pendingFire: RoomPlayer[] = [];
+  /** Melee swings collected the same way (ZOMBIES only). */
+  private readonly pendingMelee: RoomPlayer[] = [];
   /** Scratch target list handed to combat. Reused every shot. */
   private readonly targetScratch: PlayerState[] = [];
   private readonly victimScratch: FireVictim[] = [];
@@ -250,34 +253,42 @@ export class GameRoom {
     this.hooks = opts.hooks ?? createDefaultHooks();
     this.autoRespawn = opts.autoRespawn !== false;
     this.mapDef = mapForMode(this.mode);
-    this.survival =
-      this.mode === GameMode.Survival
-        ? new SurvivalDirector(this.mapDef, MAX_PLAYERS, {
+    this.zombies =
+      this.mode === GameMode.Zombies
+        ? new ZombiesDirector(this.mapDef, MAX_PLAYERS, {
             send: (id, msg) => {
               const p = this.players.get(id);
               p?.conn?.send(msg);
             },
             broadcast: (msg) => this.broadcast(msg),
-            giveWeapon: (id, weapon) => this.survivalGiveWeapon(id, weapon),
-            refillAmmo: (id) => this.survivalRefillAmmo(id),
-            stashWeaponsForDown: (id) => this.survivalStashWeapons(id),
-            restoreWeaponsOnRevive: (id) => this.survivalRestoreWeapons(id),
-            onLoadoutChanged: (id) => this.survivalReresolve(id),
+            giveWeapon: (id, weapon) => this.zGiveWeapon(id, weapon),
+            refillAmmo: (id) => this.zRefillAmmo(id),
+            stashWeaponsForDown: (id) => this.zStashWeapons(id),
+            restoreWeaponsOnRevive: (id) => this.zRestoreWeapons(id),
+            onLoadoutChanged: (id) => this.zReresolve(id),
             respawn: (id) => {
               const p = this.players.get(id);
               if (p) this.spawn(p);
             },
-            reportDeath: (id) => this.survivalReportDeath(id),
-            endMatch: () => this.survivalEndMatch(),
-            ammoOf: (id) => this.survivalAmmoOf(id),
+            reportDeath: (id) => this.zReportDeath(id),
+            endMatch: () => this.zEndMatch(),
+            ammoOf: (id) => this.zAmmoOf(id),
           })
         : null;
     this.lastKeeper = this.keeper;
   }
 
-  /** The static geometry in force this tick (survival rebuilds it on zone buys). */
+  /**
+   * The static geometry PLAYERS move against this tick (the director rebuilds
+   * it on zone buys; it includes the window blocker brushes).
+   */
   private currentWorld(): CollisionWorld {
-    return this.survival ? this.survival.world : this.world;
+    return this.zombies ? this.zombies.playerWorld : this.world;
+  }
+
+  /** The geometry bullets and melee trace against (blockers excluded). */
+  private shotWorld(): CollisionWorld {
+    return this.zombies ? this.zombies.hordeWorld : this.world;
   }
 
   /** The ScoreKeeper that is actually authoritative for this room. */
@@ -340,9 +351,9 @@ export class GameRoom {
       lastPingSentMs: 0,
       suspicious: 0,
       spawnCursor: init.id,
-      survivalHeldId: WeaponId.Kestrel,
-      survivalStowedId: WeaponId.Knife,
-      survivalStash: null,
+      zHeldId: WeaponId.Kestrel,
+      zStowedId: WeaponId.Knife,
+      zStash: null,
     };
 
     this.rebuildWeapon(p);
@@ -351,7 +362,7 @@ export class GameRoom {
       this.scoring.addPlayer(init.id, init.team);
       this.scoring.setName(init.id, init.name);
     }
-    this.survival?.addPlayer(init.id);
+    this.zombies?.addPlayer(init.id);
     this.spawn(p);
     return p;
   }
@@ -362,21 +373,21 @@ export class GameRoom {
     this.slotsUsed[p.slot] = 0;
     this.players.delete(id);
     if (!this.sink) this.scoring.removePlayer(id);
-    this.survival?.removePlayer(id);
+    this.zombies?.removePlayer(id);
   }
 
-  /** SURVIVAL: a client asked to buy something. Validated by the director. */
+  /** ZOMBIES: a client asked to buy something. Validated by the director. */
   onPurchase(id: PlayerId, kind: PurchaseKind, itemId: number): void {
     const p = this.players.get(id);
-    if (!p || !this.survival) return;
-    this.survival.purchase(p, kind, itemId, this.nowMs);
+    if (!p || !this.zombies) return;
+    this.zombies.purchase(p, kind, itemId, this.nowMs);
   }
 
-  /** SURVIVAL: generator flip / crate take. */
+  /** ZOMBIES: power flip / box take. */
   onInteract(id: PlayerId, target: InteractTarget): void {
     const p = this.players.get(id);
-    if (!p || !this.survival) return;
-    this.survival.interact(p, target, this.nowMs);
+    if (!p || !this.zombies) return;
+    this.zombies.interact(p, target, this.nowMs);
   }
 
   setConnection(id: PlayerId, conn: Connection | null): void {
@@ -489,13 +500,14 @@ export class GameRoom {
     this.nowMs = nowMs;
     const nowSec = nowMs / 1000;
     this.pendingFire.length = 0;
+    this.pendingMelee.length = 0;
 
-    // SURVIVAL: the lobby mints a fresh ScoreKeeper at every match start, so a
+    // ZOMBIES: the lobby mints a fresh ScoreKeeper at every match start, so a
     // keeper identity change IS the match-start signal — reset the director
     // and bring the squad back to the pistol start.
-    if (this.survival && this.keeper !== this.lastKeeper) {
+    if (this.zombies && this.keeper !== this.lastKeeper) {
       this.lastKeeper = this.keeper;
-      this.survival.reset();
+      this.zombies.reset();
       for (const p of this.players.values()) this.spawn(p);
     }
 
@@ -509,28 +521,34 @@ export class GameRoom {
       this.advanceMovement(p, input);
       this.recordYaw(p.id, nowSec, p.state.yaw, p.state.onGround);
       if (this.detectFire(p, input, prevButtons)) this.pendingFire.push(p);
+      if (this.zombies && p.state.alive && readRuntime(p.weaponRuntime).meleeThisTick === true) {
+        this.pendingMelee.push(p);
+      }
     }
 
-    // --- 3.5: SURVIVAL director (rounds, horde AI, melee, revives) ----------
+    // --- 3.5: ZOMBIES director (rounds, horde AI, melee, revives) -----------
     // Before the history write, so this tick's zombie positions are the ones
     // lag comp rewinds to.
-    if (this.survival) {
+    if (this.zombies) {
       const squad = this.squadScratch;
       squad.length = 0;
       for (const p of this.players.values()) squad.push(p);
-      this.survival.tick(tick, nowMs, squad);
+      this.zombies.tick(tick, nowMs, squad);
     }
 
     // --- 4: history ---------------------------------------------------------
     this.history.beginTick(tick, nowMs);
     for (const p of this.players.values()) this.history.record(p.slot, p.state);
-    if (this.survival) {
-      for (const z of this.survival.horde.actives()) this.history.record(z.slot, z.state);
+    if (this.zombies) {
+      for (const z of this.zombies.horde.actives()) this.history.record(z.slot, z.state);
     }
 
     // --- 5: lag-compensated firing -----------------------------------------
     for (let i = 0; i < this.pendingFire.length; i++) {
       this.resolveFire(this.pendingFire[i], nowMs, nowSec);
+    }
+    for (let i = 0; i < this.pendingMelee.length; i++) {
+      this.resolveMelee(this.pendingMelee[i], nowMs, nowSec);
     }
 
     // --- 6: bodies, timers -------------------------------------------------
@@ -585,10 +603,10 @@ export class GameRoom {
   }
 
   private advanceWeapon(p: RoomPlayer, input: ClientInput): void {
-    // SURVIVAL last stand: crawl and shoot the pistol, nothing else. The
-    // client applies the same mask to its own prediction (shared/survival.ts),
+    // ZOMBIES last stand: crawl and shoot the pistol, nothing else. The
+    // client applies the same mask to its own prediction (shared/zombies.ts),
     // so mangling the input here does not cause constant mispredictions.
-    if (this.survival && p.state.downed === true) {
+    if (this.zombies && p.state.downed === true) {
       input.buttons = filterDownedButtons(input.buttons);
     }
     const weapons = this.hooks.weapons;
@@ -620,48 +638,50 @@ export class GameRoom {
 
   /** The resolved spec for whichever of the two weapons `id` names. */
   private specFor(p: RoomPlayer, id: WeaponId): unknown {
-    if (this.survival) {
-      if (id === p.survivalHeldId) return p.primaryWeapon;
-      if (id === p.survivalStowedId) return p.secondaryWeapon;
-      return this.survivalSpec(p, id);
+    if (this.zombies) {
+      if (id === p.zHeldId) return p.primaryWeapon;
+      if (id === p.zStowedId) return p.secondaryWeapon;
+      return this.zSpec(p, id);
     }
     const primaryId = p.state.loadout?.primary ?? WeaponId.Talon;
     return id === primaryId ? p.primaryWeapon : p.secondaryWeapon;
   }
 
   // -------------------------------------------------------------------------
-  // SURVIVAL weapon surgery — the director asks, the room operates, because
+  // ZOMBIES weapon surgery — the director asks, the room operates, because
   // the room owns the weapon-module wiring.
   // -------------------------------------------------------------------------
 
   /**
    * Resolve a spec with the buyer's perk/Forge modifiers folded in.
-   * STEADY HAND halves `adsTime` and touches nothing else; `accuracyLockAt`
-   * (the 0.82 rule) is spread through unchanged, by design and by test.
+   * HANDLOADER halves the reload times and touches nothing else;
+   * `accuracyLockAt` (the 0.82 rule) is spread through unchanged, by design
+   * and by test. The Forge upgrade is PER WEAPON, so the forged bit is looked
+   * up for the specific id being resolved.
    */
-  private survivalSpec(p: RoomPlayer, id: WeaponId): unknown {
+  private zSpec(p: RoomPlayer, id: WeaponId): unknown {
     const weapons = this.hooks.weapons;
     if (!weapons) return null;
     const base = weapons.resolveWeapon(id, [] as never) as Parameters<
-      typeof applySurvivalWeaponMods
+      typeof applyZombiesWeaponMods
     >[0];
-    const perks = this.survival?.perksOf(p.id) ?? 0;
-    const forged = this.survival?.forgedOf(p.id) ?? false;
-    return applySurvivalWeaponMods(base, perks, forged);
+    const perks = this.zombies?.perksOf(p.id) ?? 0;
+    const forged = ((this.zombies?.forgedMaskOf(p.id) ?? 0) & (1 << id)) !== 0;
+    return applyZombiesWeaponMods(base, perks, forged);
   }
 
-  private rebuildSurvivalWeapon(p: RoomPlayer, held: WeaponId, stowed: WeaponId): void {
+  private rebuildZombiesWeapon(p: RoomPlayer, held: WeaponId, stowed: WeaponId): void {
     const weapons = this.hooks.weapons;
     if (!weapons) return;
-    p.survivalHeldId = held;
-    p.survivalStowedId = stowed;
-    p.primaryWeapon = this.survivalSpec(p, held);
-    p.secondaryWeapon = this.survivalSpec(p, stowed);
+    p.zHeldId = held;
+    p.zStowedId = stowed;
+    p.primaryWeapon = this.zSpec(p, held);
+    p.secondaryWeapon = this.zSpec(p, stowed);
     p.resolvedWeapon = p.primaryWeapon;
     p.weaponRuntime = weapons.createWeaponRuntime
       ? weapons.createWeaponRuntime(p.resolvedWeapon, p.state)
       : {};
-    const rt = p.weaponRuntime as SurvivalRuntimeShape;
+    const rt = p.weaponRuntime as ZombiesRuntimeShape;
     const stSpec = p.secondaryWeapon as { magSize: number; reserveAmmo: number } | null;
     rt.stowedWeapon = stowed;
     rt.stowedMag = stSpec?.magSize ?? 0;
@@ -670,19 +690,19 @@ export class GameRoom {
     weapons.syncStateFromRuntime?.(p.state, p.weaponRuntime, this.nowMs);
   }
 
-  private survivalGiveWeapon(id: PlayerId, weapon: WeaponId): void {
+  private zGiveWeapon(id: PlayerId, weapon: WeaponId): void {
     const p = this.players.get(id);
     const weapons = this.hooks.weapons;
     if (!p || !weapons || !p.weaponRuntime) return;
-    const rt = p.weaponRuntime as SurvivalRuntimeShape;
-    const spec = this.survivalSpec(p, weapon) as { magSize: number; reserveAmmo: number };
+    const rt = p.weaponRuntime as ZombiesRuntimeShape;
+    const spec = this.zSpec(p, weapon) as { magSize: number; reserveAmmo: number };
     // The old held gun is kept as the sidearm; whatever was stowed is dropped.
-    p.survivalStowedId = p.survivalHeldId;
+    p.zStowedId = p.zHeldId;
     p.secondaryWeapon = p.primaryWeapon;
     rt.stowedWeapon = rt.weapon;
     rt.stowedMag = rt.ammoInMag;
     rt.stowedReserve = rt.ammoReserve;
-    p.survivalHeldId = weapon;
+    p.zHeldId = weapon;
     p.primaryWeapon = spec;
     p.resolvedWeapon = spec;
     rt.weapon = weapon;
@@ -694,11 +714,11 @@ export class GameRoom {
     weapons.syncStateFromRuntime?.(p.state, p.weaponRuntime, this.nowMs);
   }
 
-  private survivalRefillAmmo(id: PlayerId): void {
+  private zRefillAmmo(id: PlayerId): void {
     const p = this.players.get(id);
     const weapons = this.hooks.weapons;
     if (!p || !weapons || !p.weaponRuntime) return;
-    const rt = p.weaponRuntime as SurvivalRuntimeShape;
+    const rt = p.weaponRuntime as ZombiesRuntimeShape;
     const held = p.primaryWeapon as { magSize: number; reserveAmmo: number } | null;
     const stowed = p.secondaryWeapon as { magSize: number; reserveAmmo: number } | null;
     if (held) {
@@ -712,56 +732,56 @@ export class GameRoom {
     weapons.syncStateFromRuntime?.(p.state, p.weaponRuntime, this.nowMs);
   }
 
-  private survivalStashWeapons(id: PlayerId): void {
+  private zStashWeapons(id: PlayerId): void {
     const p = this.players.get(id);
-    if (!p || p.survivalStash) return;
-    p.survivalStash = {
+    if (!p || p.zStash) return;
+    p.zStash = {
       runtime: p.weaponRuntime,
-      heldId: p.survivalHeldId,
-      stowedId: p.survivalStowedId,
+      heldId: p.zHeldId,
+      stowedId: p.zStowedId,
       heldSpec: p.primaryWeapon,
       stowedSpec: p.secondaryWeapon,
     };
-    this.rebuildSurvivalWeapon(p, WeaponId.Kestrel, WeaponId.Knife);
+    this.rebuildZombiesWeapon(p, WeaponId.Kestrel, WeaponId.Knife);
   }
 
-  private survivalRestoreWeapons(id: PlayerId): void {
+  private zRestoreWeapons(id: PlayerId): void {
     const p = this.players.get(id);
-    const stash = p?.survivalStash;
+    const stash = p?.zStash;
     if (!p || !stash) return;
     p.weaponRuntime = stash.runtime;
-    p.survivalHeldId = stash.heldId;
-    p.survivalStowedId = stash.stowedId;
+    p.zHeldId = stash.heldId;
+    p.zStowedId = stash.stowedId;
     p.primaryWeapon = stash.heldSpec;
     p.secondaryWeapon = stash.stowedSpec;
     p.resolvedWeapon = stash.heldSpec;
-    p.survivalStash = null;
+    p.zStash = null;
     const weapons = this.hooks.weapons;
     weapons?.applyLoadoutToState?.(p.state, p.resolvedWeapon);
     weapons?.syncStateFromRuntime?.(p.state, p.weaponRuntime, this.nowMs);
   }
 
-  /** Perks or The Forge changed: re-resolve both carried specs. */
-  private survivalReresolve(id: PlayerId): void {
+  /** Perks or the Forge changed: re-resolve both carried specs. */
+  private zReresolve(id: PlayerId): void {
     const p = this.players.get(id);
     if (!p || !p.weaponRuntime) return;
-    p.primaryWeapon = this.survivalSpec(p, p.survivalHeldId);
-    p.secondaryWeapon = this.survivalSpec(p, p.survivalStowedId);
+    p.primaryWeapon = this.zSpec(p, p.zHeldId);
+    p.secondaryWeapon = this.zSpec(p, p.zStowedId);
     p.resolvedWeapon = p.primaryWeapon;
     const weapons = this.hooks.weapons;
     weapons?.applyLoadoutToState?.(p.state, p.resolvedWeapon);
   }
 
-  private survivalAmmoOf(id: PlayerId): {
+  private zAmmoOf(id: PlayerId): {
     held: WeaponId;
-    stowed: WeaponId;
+    stowed: number;
     mag: number;
     reserve: number;
     stowedMag: number;
     stowedReserve: number;
   } {
     const p = this.players.get(id);
-    const rt = p?.weaponRuntime as SurvivalRuntimeShape | undefined;
+    const rt = p?.weaponRuntime as ZombiesRuntimeShape | undefined;
     if (!p || !rt) {
       return {
         held: WeaponId.Kestrel,
@@ -773,8 +793,8 @@ export class GameRoom {
       };
     }
     return {
-      held: rt.weapon ?? p.survivalHeldId,
-      stowed: rt.stowedWeapon ?? p.survivalStowedId,
+      held: rt.weapon ?? p.zHeldId,
+      stowed: rt.stowedWeapon ?? p.zStowedId,
       mag: rt.ammoInMag ?? 0,
       reserve: rt.ammoReserve ?? 0,
       stowedMag: rt.stowedMag ?? 0,
@@ -782,7 +802,7 @@ export class GameRoom {
     };
   }
 
-  private survivalReportDeath(id: PlayerId): void {
+  private zReportDeath(id: PlayerId): void {
     const p = this.players.get(id);
     if (!p) return;
     // No respawn until the director brings the next round in.
@@ -792,7 +812,7 @@ export class GameRoom {
     this.syncStats(id);
   }
 
-  private survivalEndMatch(): void {
+  private zEndMatch(): void {
     if (this.sink) {
       this.sink.endMatch?.();
       return;
@@ -813,10 +833,10 @@ export class GameRoom {
   }
 
   private rebuildWeapon(p: RoomPlayer): void {
-    if (this.survival) {
+    if (this.zombies) {
       // The pistol start: Kestrel in hand, knife in the sheath. Every real gun
-      // is bought off a wall or spun out of the crate.
-      this.rebuildSurvivalWeapon(p, WeaponId.Kestrel, WeaponId.Knife);
+      // is bought off a wall or spun out of the box.
+      this.rebuildZombiesWeapon(p, WeaponId.Kestrel, WeaponId.Knife);
       return;
     }
     const weapons = this.hooks.weapons;
@@ -875,11 +895,11 @@ export class GameRoom {
     this.rewind.reset();
     const targets = this.targetScratch;
     targets.length = 0;
-    if (this.survival) {
-      // SURVIVAL is co-op: bullets only ever connect with zombies. Rewinding
-      // them through the same history as players is what keeps hit reg honest
+    if (this.zombies) {
+      // ZOMBIES is co-op: bullets only ever connect with the horde. Rewinding
+      // it through the same history as players is what keeps hit reg honest
       // at 150ms — the shot lands where the crosshair saw the zombie.
-      for (const z of this.survival.horde.actives()) {
+      for (const z of this.zombies.horde.actives()) {
         const copy = this.rewind.take(z.state);
         this.history.sample(z.slot, targetTime, copy);
         targets.push(copy);
@@ -903,7 +923,7 @@ export class GameRoom {
       input: p.lastInput,
       weaponRuntime: p.weaponRuntime,
       resolvedWeapon: p.resolvedWeapon,
-      world: this.currentWorld(),
+      world: this.shotWorld(),
     };
 
     let outcome;
@@ -924,35 +944,101 @@ export class GameRoom {
       return;
     }
 
+    this.applyOutcome(p, outcome, false, nowMs, nowSec);
+  }
+
+  /** ZOMBIES: a quick-melee swing, resolved against the rewound horde. */
+  private resolveMelee(p: RoomPlayer, nowMs: number, nowSec: number): void {
+    const resolve = this.hooks.resolveMelee;
+    if (!resolve || !this.zombies) return;
+
+    const rewindMs = LagCompHistory.rewindForRtt(p.rttMs);
+    const targetTime = nowMs - rewindMs;
+
+    this.rewind.reset();
+    const targets = this.targetScratch;
+    targets.length = 0;
+    for (const z of this.zombies.horde.actives()) {
+      const copy = this.rewind.take(z.state);
+      this.history.sample(z.slot, targetTime, copy);
+      targets.push(copy);
+    }
+
+    const ctx: FireContext = {
+      shooter: p.state,
+      targets,
+      rewindMs,
+      tick: this.tickIndex,
+      nowMs,
+      nowSeconds: nowSec,
+      input: p.lastInput,
+      weaponRuntime: p.weaponRuntime,
+      resolvedWeapon: p.resolvedWeapon,
+      world: this.shotWorld(),
+    };
+
+    let outcome;
+    try {
+      outcome = resolve(ctx);
+    } catch (err) {
+      logOnce('resolveMelee threw', err);
+      return;
+    }
+    if (!outcome || (outcome.reason !== null && outcome.reason !== undefined)) return;
+
+    this.applyOutcome(p, outcome, true, nowMs, nowSec);
+  }
+
+  /**
+   * Re-apply a fire/melee outcome to the LIVE simulation. Combat resolved
+   * against the rewound clones and applied its damage there — the clones are
+   * scratch, and death, respawn timers and replication all belong here.
+   */
+  private applyOutcome(
+    p: RoomPlayer,
+    outcome: FireOutcome,
+    melee: boolean,
+    nowMs: number,
+    nowSec: number,
+  ): void {
     if (outcome.hitMessages) {
       for (let i = 0; i < outcome.hitMessages.length; i++) {
         this.broadcast({ type: ServerMessage.Hit, data: outcome.hitMessages[i] });
       }
     }
 
-    // Combat resolved against the REWOUND CLONES and applied its damage there.
-    // Re-apply it to the live players here: the clones are scratch, and death,
-    // respawn timers and replication all belong to the room.
     const victims = this.victimScratch;
     victims.length = 0;
     if (outcome.hits) {
       for (let i = 0; i < outcome.hits.length; i++) {
         const h = outcome.hits[i];
-        if (this.survival && isZombieId(h.victimId)) {
-          // Perks, The Forge, Insta-Kill and the zombie head multiplier all
+        if (this.zombies && isZombieId(h.victimId)) {
+          // Perks, the Forge, Insta-Kill and the zombie head multiplier all
           // apply here, on top of combat's penetration-scaled damage.
-          const mult = this.survival.damageMultFor(p.id, h.part, nowMs);
-          const res = this.survival.horde.damage(h.victimId, h.damage * mult);
+          const weapon = melee ? WeaponId.Knife : p.state.activeWeapon;
+          const mult = this.zombies.damageMultFor(p.id, weapon, h.part, nowMs);
+          const res = this.zombies.horde.damage(h.victimId, h.damage * mult);
           if (!res) continue;
-          this.survival.onZombieHit(p.id, nowMs);
+          this.zombies.onZombieHit(p.id, nowMs);
           if (res.killed) {
             victims.push({ id: h.victimId, part: h.part, distance: h.distance });
+            // Canon flat kill payout + the power-up roll, at the corpse.
+            this.zombies.onZombieKill(
+              p.id,
+              h.part,
+              melee,
+              res.x,
+              res.y,
+              res.z,
+              this.tickIndex,
+              nowMs,
+            );
           }
           continue;
         }
         const victim = this.players.get(h.victimId);
         if (!victim || !victim.state.alive) continue;
-        if (this.survival) continue; // no friendly fire in co-op
+        if (this.zombies) continue; // no friendly fire in co-op
         if (this.applyDamage(victim, h.damage, nowMs)) {
           victims.push({ id: h.victimId, part: h.part, distance: h.distance });
         }
@@ -960,11 +1046,10 @@ export class GameRoom {
     }
 
     if (victims.length > 0) {
-      const msg = this.reportKill(p, victims, nowSec, outcome.context);
-      if (this.survival && msg) {
-        // Trickshot points ARE Zombies points: the keeper's verdict, halved.
-        this.survival.onZombieKills(p.id, msg.score, victims.length, this.tickIndex, nowMs);
-      }
+      // The keeper still runs for the feed and the kills column; in ZOMBIES
+      // its trickshot score is cosmetic — the director already paid the flat
+      // canon points above.
+      this.reportKill(p, victims, nowSec, outcome.context);
     }
   }
 
@@ -1079,9 +1164,9 @@ export class GameRoom {
     if (!p) return;
     const stats = this.keeper.statsFor(id);
     if (!stats) return;
-    // SURVIVAL: `score` on the wire is the SPENDABLE BALANCE, written by the
+    // ZOMBIES: `score` on the wire is the SPENDABLE BALANCE, written by the
     // director every tick — the keeper's cumulative score must not clobber it.
-    if (!this.survival) p.state.score = stats.score;
+    if (!this.zombies) p.state.score = stats.score;
     p.state.kills = stats.kills;
     p.state.deaths = stats.deaths;
     p.state.streak = stats.streak;
@@ -1090,17 +1175,17 @@ export class GameRoom {
   private postSim(p: RoomPlayer, nowMs: number, nowSec: number): void {
     const s = p.state;
 
-    if (this.survival) {
+    if (this.zombies) {
       // Downed players do not regenerate and the dead wait for the next round
-      // (the director respawns them); regen respects the Deadeye health cap.
+      // (the director respawns them); regen respects the BULWARK health cap.
       if (s.alive && s.downed !== true) {
         if (p.oobSeconds >= OOB_COUNTDOWN) {
-          this.survival.environmentalDeath(p);
+          this.zombies.environmentalDeath(p);
           this.syncStats(p.id);
           p.oobSeconds = 0;
           return;
         }
-        const cap = maxHealthForPerks(this.survival.perksOf(p.id));
+        const cap = maxHealthForPerks(this.zombies.perksOf(p.id));
         if (s.health < cap && nowMs - p.lastDamageAtMs >= HEALTH_REGEN_DELAY * 1000) {
           s.health = Math.min(cap, s.health + HEALTH_REGEN_RATE * TICK_DT);
         }
@@ -1139,9 +1224,9 @@ export class GameRoom {
     let best: SpawnPoint = points[p.spawnCursor % points.length];
     let bestScore = -Infinity;
     const n = points.length;
-    // SURVIVAL spawns the squad together: no enemies to stand clear of, and
-    // the cursor alone spreads players across the aft-deck cluster.
-    if (this.survival) {
+    // ZOMBIES spawns the squad together: no enemies to stand clear of, and
+    // the cursor alone spreads players across the spawn cluster.
+    if (this.zombies) {
       const sp = points[p.spawnCursor % n];
       p.spawnCursor = (p.spawnCursor + 1) % n;
       return sp;
@@ -1187,7 +1272,7 @@ export class GameRoom {
     s.sprintTime = 0;
     s.prevButtons = 0;
     s.proneTime = 0;
-    s.health = this.survival ? maxHealthForPerks(this.survival.perksOf(p.id)) : MAX_HEALTH;
+    s.health = this.zombies ? maxHealthForPerks(this.zombies.perksOf(p.id)) : MAX_HEALTH;
     s.alive = true;
     s.adsState = AdsState.Hip;
     s.adsProgress = 0;
@@ -1197,7 +1282,7 @@ export class GameRoom {
     p.oobSeconds = 0;
     p.respawnRequested = false;
     p.lastDamageAtMs = -1e9;
-    p.survivalStash = null;
+    p.zStash = null;
     this.rebuildWeapon(p);
 
     // The spawn angle is authoritative, so the client's controller must adopt
@@ -1310,12 +1395,17 @@ export class GameRoom {
     for (const p of this.players.values()) {
       this.assembler.addPlayer(p.state, { fired: p.firedLatch });
     }
-    if (this.survival) {
+    if (this.zombies) {
       // Zombies ride the same channel, limited to Position|Yaw|Flags (~12 B
-      // instead of ~22): the bandwidth budget REQUIRES the reduced mask.
-      for (const z of this.survival.horde.actives()) {
+      // instead of ~22): the bandwidth budget REQUIRES the reduced mask. The
+      // fired flag carries "swung since the last snapshot" so the client can
+      // animate the lunge/tear without any extra wire format.
+      for (const z of this.zombies.horde.actives()) {
         snapPositionInPlace(z.state.position);
-        this.assembler.addPlayer(z.state, { fired: false, maskLimit: ZOMBIE_FIELD_MASK });
+        this.assembler.addPlayer(z.state, {
+          fired: tick - z.swungAtTick < SNAPSHOT_EVERY,
+          maskLimit: ZOMBIE_FIELD_MASK,
+        });
       }
     }
 
@@ -1401,11 +1491,11 @@ export function copyInput(src: ClientInput, dst: ClientInput): void {
 }
 
 /**
- * The runtime fields survival weapon surgery reaches into. Structural: the
+ * The runtime fields ZOMBIES weapon surgery reaches into. Structural: the
  * real `WeaponRuntime` from shared/weapons.ts satisfies this; a hook-injected
  * stand-in that does not simply degrades the feature.
  */
-interface SurvivalRuntimeShape {
+interface ZombiesRuntimeShape {
   weapon: WeaponId;
   stowedWeapon: WeaponId;
   ammoInMag: number;

@@ -424,48 +424,59 @@ tweaked skin can never drift from its picker card. The wire format grew one
 byte (`writeLoadout`/`readLoadout`), clamped by `clampEnum` so a stale or
 hostile skin byte degrades to Vanguard instead of dropping the socket.
 
-## SURVIVAL (co-op Zombies, ticket DECK-V85WIP)
+## ZOMBIES (full rewrite of the old SURVIVAL mode)
 
-**Frozen-contract edits — reported per INTEGRATION.md rule 1.** All additive,
-none change the wire layout of an existing message:
+**The old SURVIVAL mode (`e712dc4`) was deleted and rebuilt from scratch** —
+new map (Shipbreak replaces Leviathan), new director, new AI, new economy, new
+HUD, new renderer, new audio. The design contract is `ZOMBIES.md`; the old
+mode's recorded gaps (no zombie animation, no zombie audio, 168-draw-call
+horde, full-world rebuild hitch on every door, invisible power-ups, no
+barriers) were the rewrite's requirements list.
 
-| File | Edit |
-|---|---|
-| `types.ts` | `GameMode.Survival = 2`; `InputButton.Use = 1 << 9` (u16 buttons, bits 9-15 were free); `WeaponId` 3–6 (Osprey/Shrike/Condor/Harrier); optional `PlayerState.downed/bleedout/points/perks` |
-| `protocol.ts` | `ClientMessage.Purchase = 13`, `Interact = 14`; `ServerMessage.SurvivalState = 76`; `SnapshotPlayer.downed?` riding Flags bit 3; `PROTOCOL_VERSION` → `1.2.0` (stale tabs get a version-mismatch error, by design) |
-| `tuning.ts` | Four new `WeaponSpec`s (the `WEAPONS` record is typed over `WeaponId`, so the enum addition forces them); optional `WeaponSpec.auto` for hold-to-fire |
-| `mapdata.ts` | **untouched** — Leviathan lives in `shared/leviathan.ts` behind a `MapDef` registry (`shared/maps.ts`), and `assertSymmetric()` keeps applying to Sundeck only |
+**What survived the rewrite is wire format and infrastructure, not the mode:**
+the id partition (players 1–199, horde 200+ on the snapshot channel at
+`Position|Yaw|Flags`, ~12 B/zombie), opcodes 13/14/76, `InputButton.Use`,
+`WeaponId` 3–6 and their tuning specs, the collision multi-map refactor, the
+nav graph module, and the `MapDef` registry. The 76 payload was redesigned
+(drops, window planks, per-weapon Forge mask, revive progress), which is
+wire-breaking, so `PROTOCOL_VERSION` → `2.0.0`; client and server always
+deploy together and stale tabs get the version-mismatch error, by design.
 
-**Zombies are `PlayerState`-shaped entities on the existing snapshot channel,
-partitioned by id range** (players 1–199, horde 200+, `TeamId.Bravo`). That
-buys hitboxes, penetration collaterals, delta compression, interpolation and
-lag comp with no parallel entity pipeline. They replicate `Position|Yaw|Flags`
-only (~12 B) via a per-entity mask ceiling in the snapshot assembler — a
-bandwidth requirement (5 players + 24 zombies measures ~7.1 KB/s against the
-12 KB/s budget, enforced by test). Zombie health (up to 100,000) never goes on
-the wire; the u8 health field could not carry it and canon shows no bars.
+**Renames in frozen files, wire values unchanged:** `GameMode.Survival` →
+`GameMode.Zombies` (still 2), `ServerMessage.SurvivalState` →
+`ZombiesState` (still 76). Squad cap is canon **4** (was 5) — as close to the
+source material as possible was the brief.
 
-**The `collision.ts` multi-map refactor is additive.** Zero-arg
-`createCollisionWorld()` still returns the cached Sundeck singleton;
-`CollisionWorld` now carries its own `bounds`/`waterLevel`;
-`raycastWorld[All]In(world, ...)` variants exist beside the singleton forms;
-`isOutOfBounds(pos, world?)` defaults to Sundeck. No existing call site
-changed behaviour.
+**Economy is canon flat payouts, not trickshot-derived.** 10/hit, 60/kill,
+100/headshot, 130/knife, +10/plank (100/round cap), 500 start. The old mode
+paid trickshot-score × 0.5, which made income swingy and opaque; the keeper
+still runs for the kills column, its score is cosmetic here. Pinned in
+tests/zombies.test.ts.
 
-**Zone doors are real brushes, removed on purchase.** Opening a zone rebuilds
-the collision world (server) and the render + prediction worlds (client) from
-`collisionBrushesFor(map, zoneMask)`; zombies path a waypoint graph whose
-edges are traversable iff the zone they ENTER is open, so "zombies only reach
-where players have paid to open" falls out of the graph.
+**Two collision worlds.** Window blocker brushes (`Brush.playersOnly`,
+additive edit to frozen mapdata.ts) stop players but neither zombies nor
+bullets: the director keeps `playerWorld` (movement/prediction) and
+`hordeWorld` (zombie locomotion + shot tracing) and rebuilds both on door
+purchases. The client renders neither the blockers nor a rebuild: the static
+world is built once and doors are individual meshes a manager toggles — the
+old per-purchase full rebuild hitch is gone. `PlayerState.speedMult`
+(ADRENALINE) is an additive frozen-types edit applied identically in shared
+movement by both sides, like `adsMoveSpeedOverride` before it.
 
-**STEADY HAND halves `adsTime` and nothing else.** `accuracyLockAt` stays
-0.82 and unmodifiable (`applySurvivalWeaponMods` spreads it through
-untouched; a test pins it). Down-state is enforced as an input mask
-(`filterDownedButtons`) applied by BOTH sides, so prediction stays honest
-while crawling.
+**Melee finally exists server-side.** `hooks.resolveMelee` +
+`MeleeRequest.world` wire the knife into the rewound-target pipeline (ZOMBIES
+is its first consumer; competitive modes are untouched). A zombie's swing is
+telegraphed: the wind-up tick sets the entity's snapshot `fired` flag, which
+the client reads as the lunge animation — no new wire format.
 
-**Known survival gaps, recorded not hidden:** power-ups apply squad-wide the
-moment they drop (no pickup entity); the four new guns borrow the two
-existing viewmodel rigs; Carpenter never drops (no repairable barriers, per
-the plan's out-of-scope list); zombie audio is not yet synthesized.
+**HANDLOADER halves reload times and nothing else.** `accuracyLockAt` stays
+0.82 and unmodifiable (`applyZombiesWeaponMods` spreads it through untouched;
+a test pins it). The Forge upgrade is per WEAPON (a bitmask), not per player —
+a gun dropped for a new one takes its upgrade with it.
+
+**Known gaps, recorded not hidden:** the four wall-buy guns still borrow the
+two existing viewmodel rigs; window openings rely on map authoring for
+zombie-passable clearance (pinned by the shipbreak nav/window tests plus the
+sim test that walks a zombie through one); zombie pathing has no jump link
+vocabulary, so all routes are step/ramp-connected.
 

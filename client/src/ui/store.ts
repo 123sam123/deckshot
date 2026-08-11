@@ -17,7 +17,7 @@ import type {
   MatchOverMsg,
   RoundStateMsg,
   ScoreboardEntry,
-  SurvivalStateMsg,
+  ZombiesStateMsg,
 } from '../../../shared/protocol.js';
 import { ErrorCode, TrickshotFlag } from '../../../shared/protocol.js';
 import { AdsState, HitboxPart, RoundPhase, WeaponId } from '../../../shared/types.js';
@@ -102,10 +102,12 @@ export interface UIState {
   loadout: Loadout;
   /** Bumped on each local kill so the counter re-runs its pop animation. */
   killPop: number;
-  /** SURVIVAL: the latest per-recipient round/economy state, or null. */
-  survival: SurvivalStateMsg | null;
-  /** SURVIVAL: contextual "hold F to ..." prompt. */
-  survivalPrompt: string | null;
+  /** ZOMBIES: the latest per-recipient round/economy state, or null. */
+  zombies: ZombiesStateMsg | null;
+  /** ZOMBIES: contextual "[F] ..." prompt. */
+  zombiesPrompt: string | null;
+  /** ZOMBIES: names of OTHER squad members currently down. */
+  zombiesDowned: string[];
 }
 
 export function initialState(): UIState {
@@ -129,8 +131,9 @@ export function initialState(): UIState {
     settings: loadSettings(),
     loadout: loadLoadout(),
     killPop: 0,
-    survival: null,
-    survivalPrompt: null,
+    zombies: null,
+    zombiesPrompt: null,
+    zombiesDowned: [],
   };
 }
 
@@ -210,7 +213,7 @@ export class UIStore {
   }
 
   nameFor(id: PlayerId): string {
-    if (id >= 200) return 'Drowned'; // SURVIVAL horde id range
+    if (id >= 200) return 'Breaker'; // ZOMBIES horde id range (ZOMBIE_ID_BASE)
     const inLobby = this.state.lobby?.players.find((p) => p.id === id);
     if (inLobby) return inLobby.name;
     const inBoard = this.state.scoreboard.find((e) => e.id === id);

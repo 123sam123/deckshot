@@ -17,12 +17,12 @@ import { loadMode, saveMode, saveName } from '../persist.js';
 import { useUI, useUICtx } from '../store.js';
 import { cleanCodeInput, click, hover, lobbyCodeFromUrl } from '../util.js';
 
-// TDM score limit mirrors LobbyScreen's SCORE_LIMITS_TDM[1]; Survival carries none.
+// TDM score limit mirrors LobbyScreen's SCORE_LIMITS_TDM[1]; Zombies carries none.
 const SCORE_LIMIT_TDM = 50;
 const scoreLimitFor = (mode: GameMode): number =>
   mode === GameMode.TeamDeathmatch
     ? SCORE_LIMIT_TDM
-    : mode === GameMode.Survival
+    : mode === GameMode.Zombies
       ? 0
       : FFA_SCORE_LIMIT;
 
@@ -33,15 +33,15 @@ interface ModeCard {
   solo?: boolean;
 }
 
-// Order and copy match the ticket: SURVIVAL's solo badge is the whole point —
-// a lone visitor must see there is something to play with nobody else online.
+// ZOMBIES' solo badge is the whole point — a lone visitor must see there is
+// something to play with nobody else online.
 const MODE_CARDS: ModeCard[] = [
   { mode: GameMode.SnipersOnlyFFA, name: 'FFA', desc: 'Free-for-all quickscoping · 2+ players' },
   { mode: GameMode.TeamDeathmatch, name: 'Team Deathmatch', desc: 'Two squads · 2+ players' },
   {
-    mode: GameMode.Survival,
-    name: 'Survival',
-    desc: 'Co-op Zombies on Leviathan · playable solo · 1–5 players',
+    mode: GameMode.Zombies,
+    name: 'Zombies',
+    desc: 'Round-based undead co-op on Shipbreak · playable solo · 1–4 players',
     solo: true,
   },
 ];

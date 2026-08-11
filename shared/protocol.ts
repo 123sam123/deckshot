@@ -59,9 +59,9 @@ export enum ClientMessage {
   Pong = 11,
   /** Client asks to respawn after the death timer expires. */
   RequestRespawn = 12,
-  /** SURVIVAL: buy a zone, wall weapon, perk, upgrade, ammo or crate spin. */
+  /** ZOMBIES: buy a door, wall weapon, perk, Forge upgrade, ammo or box spin. */
   Purchase = 13,
-  /** SURVIVAL: flip the generator, take a crate weapon. */
+  /** ZOMBIES: flip the power switch, take a box weapon. */
   Interact = 14,
 }
 
@@ -89,8 +89,8 @@ export enum ServerMessage {
   Correction = 74,
   /** Match ended; carries final scoreboard and best trickshot. */
   MatchOver = 75,
-  /** SURVIVAL: round machine, zones, power, per-recipient points/perks. ~1Hz + on change. */
-  SurvivalState = 76,
+  /** ZOMBIES: round machine, zones, drops, windows, per-recipient economy. ~1Hz + on change. */
+  ZombiesState = 76,
 }
 
 // ---------------------------------------------------------------------------
@@ -125,18 +125,18 @@ export interface SetLoadoutMsg {
 }
 
 /**
- * SURVIVAL purchases. What `itemId` means depends on `kind`:
+ * ZOMBIES purchases. What `itemId` means depends on `kind`:
  * Zone -> zone index, Weapon -> WeaponId (wall buy or ammo re-buy),
- * Perk -> PerkId, Forge/Crate -> ignored.
+ * Perk -> PerkId, Forge/Box -> ignored.
  */
 export interface PurchaseMsg {
-  kind: number; // shared/survival.ts PurchaseKind
+  kind: number; // shared/zombies.ts PurchaseKind
   itemId: number;
 }
 
-/** SURVIVAL interactions that are not purchases. */
+/** ZOMBIES interactions that are not purchases. */
 export interface InteractMsg {
-  target: number; // shared/survival.ts InteractTarget
+  target: number; // shared/zombies.ts InteractTarget
 }
 
 /**
@@ -227,7 +227,7 @@ export interface SnapshotPlayer {
   adsProgress: number;
   /** Set for one snapshot on the tick the player fired; drives remote VFX. */
   firedThisTick: boolean;
-  /** SURVIVAL: last stand. Rides Flags bit 3 (additive; bits 3-7 were free). */
+  /** ZOMBIES: last stand. Rides Flags bit 3 (additive; bits 3-7 were free). */
   downed?: boolean;
 }
 
@@ -252,7 +252,7 @@ export enum SnapshotField {
   Yaw = 1 << 2, // u16 quantized
   Pitch = 1 << 3, // i16 quantized
   Stance = 1 << 4, // u8
-  Flags = 1 << 5, // u8: bit0 onGround, bit1 alive, bit2 firedThisTick, bit3 downed (SURVIVAL)
+  Flags = 1 << 5, // u8: bit0 onGround, bit1 alive, bit2 firedThisTick, bit3 downed (ZOMBIES)
   Health = 1 << 6, // u8
   Weapon = 1 << 7, // u8
   Ads = 1 << 8, // u8 state (2 bits) + u8 progress (0..255)
@@ -373,49 +373,77 @@ export interface MatchOverMsg {
   bestTrickshot: KillMsg | null;
 }
 
+/** A power-up lying on the deck, waiting to be walked over. */
+export interface PowerupDrop {
+  /** Stable id while the drop lives (drives client spawn/expire animation). u8. */
+  id: number;
+  /** shared/zombies.ts PowerupId. */
+  kind: number;
+  /** World position, quantized like everything else. */
+  pos: Vec3;
+  /** Seconds until it fades out. */
+  secondsLeft: number;
+}
+
 /**
- * SURVIVAL round machine + map progression, assembled PER RECIPIENT (the
- * `your*` fields differ per client). Sent on any change and at ~1Hz. Everything
- * squad-wide that the snapshot channel does not carry lives here; zombie
- * positions ride the ordinary snapshot as id >= ZOMBIE_ID_BASE entities.
+ * ZOMBIES round machine + map progression, assembled PER RECIPIENT (the
+ * recipient-specific block differs per client). Sent on any change and at
+ * ~1Hz. Everything squad-wide that the snapshot channel does not carry lives
+ * here; zombie positions ride the ordinary snapshot as id >= ZOMBIE_ID_BASE
+ * entities.
  */
-export interface SurvivalStateMsg {
+export interface ZombiesStateMsg {
   round: number;
-  /** shared/survival.ts SurvivalPhase. */
+  /** shared/zombies.ts ZombiesPhase. */
   phase: number;
   /** Seconds remaining in the current phase (intermission countdown; 0 mid-wave). */
   timeRemaining: number;
-  /** Zombies not yet killed this round (spawned + pending). */
+  /** Zombies not yet killed this round (alive + still to spawn). */
   zombiesRemaining: number;
   powerOn: boolean;
   /** Bit per zone index; bit set = purchased/open. */
   zoneMask: number;
-  /** Zone index the mystery crate currently sits in; 255 = none. */
-  crateZone: number;
-  /** Active power-ups: [PowerupId, secondsRemaining] pairs. */
-  powerups: Array<[number, number]>;
-  /** Recipient's spendable balance (u32 — `score` saturates at 65535). */
-  yourPoints: number;
-  /** Recipient's PerkId bitfield. */
-  yourPerks: number;
-  /** Recipient's seconds of bleedout left; 0 when not downed. */
-  yourBleedout: number;
-  /** True once the recipient's weapon has been through The Forge. */
-  yourForged: boolean;
+  /** CrateSpot `spot` index the mystery box currently sits at; 255 = none. */
+  boxSpot: number;
+  /** Active squad-wide power-ups: [PowerupId, secondsRemaining] pairs. */
+  effects: Array<[number, number]>;
+  /** Power-up drops on the deck (<= MAX_DROPS). */
+  drops: PowerupDrop[];
+  /** Planks per window, dense by WindowDef id, 0..PLANKS_MAX (u4 packed). */
+  planks: number[];
+
+  // --- per-recipient -------------------------------------------------------
+  /** Spendable balance (u32 — `score` saturates at 65535). */
+  points: number;
+  /** PerkId bitfield. */
+  perks: number;
+  /** Seconds of bleedout left; 0 when not downed. */
+  bleedout: number;
+  /** SECOND WIND self-revives remaining (solo). */
+  selfRevives: number;
+  /** Bit per WeaponId: this recipient's Forge-upgraded guns. */
+  forged: number;
   /**
-   * Recipient's authoritative arsenal. Ammo is not in the snapshot, and
-   * SURVIVAL grants/refills weapons server-side, so prediction syncs from
-   * here (a refill only ever RAISES a counter — the client keeps its own
+   * Recipient's authoritative arsenal. Ammo is not in the snapshot, and the
+   * mode grants/refills weapons server-side, so prediction syncs from here
+   * (a refill only ever RAISES a counter — the client keeps its own
    * prediction when it is ahead).
    */
-  yourHeldWeapon: WeaponId;
-  yourStowedWeapon: WeaponId;
-  yourAmmoInMag: number;
-  yourAmmoReserve: number;
-  yourStowedMag: number;
-  yourStowedReserve: number;
-  /** WeaponId the crate rolled for the recipient, or 255 when no offer stands. */
-  yourCrateOffer: number;
+  held: WeaponId;
+  /** 255 = no stowed weapon. */
+  stowed: number;
+  ammoMag: number;
+  ammoReserve: number;
+  stowedMag: number;
+  stowedReserve: number;
+  /** WeaponId the box rolled for the recipient, or 255 when no offer stands. */
+  boxOffer: number;
+  /** Plank-repair points income left this round (REPAIR_BUDGET_PER_ROUND cap). */
+  repairBudget: number;
+  /** 0..1 progress of the revive the recipient is performing; 0 = none. */
+  reviveProgress: number;
+  /** True while a teammate is actively reviving the (downed) recipient. */
+  beingRevived: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -433,7 +461,7 @@ export const LOBBY_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const LOBBY_CODE_LENGTH = 4;
 
 /** Bumped on any protocol change. Server rejects mismatched clients. */
-export const PROTOCOL_VERSION = '1.2.0';
+export const PROTOCOL_VERSION = '2.0.0';
 
 // ---------------------------------------------------------------------------
 // Typed message unions — used by the dispatch layer.
@@ -468,7 +496,7 @@ export type AnyServerMessage =
   | { type: ServerMessage.Ping; data: { time: number } }
   | { type: ServerMessage.Correction; data: CorrectionMsg }
   | { type: ServerMessage.MatchOver; data: MatchOverMsg }
-  | { type: ServerMessage.SurvivalState; data: SurvivalStateMsg };
+  | { type: ServerMessage.ZombiesState; data: ZombiesStateMsg };
 
 /**
  * The codec contract. Implemented once in shared/codec.ts by netcode-core and

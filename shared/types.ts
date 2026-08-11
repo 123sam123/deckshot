@@ -59,7 +59,7 @@ export enum WeaponId {
   Talon = 0, // MK-7 Talon — bolt-action sniper (primary)
   Kestrel = 1, // Kestrel .40 — semi-auto pistol (secondary)
   Knife = 2, // melee
-  // --- SURVIVAL wall buys (additive; reported per INTEGRATION.md rule 1) ---
+  // --- ZOMBIES wall buys (additive; reported per INTEGRATION.md rule 1) ---
   Osprey = 3, // Osprey 9 — full-auto SMG
   Shrike = 4, // Shrike 12 — pump shotgun
   Condor = 5, // Condor MG — LMG
@@ -228,15 +228,21 @@ export interface PlayerState {
   /** Round-trip time in ms, as measured by the server. */
   ping: number;
 
-  // --- SURVIVAL (optional, additive; reported per INTEGRATION.md rule 1) ---
+  // --- ZOMBIES (optional, additive; reported per INTEGRATION.md rule 1) ---
   /** True while in last stand: prone crawl, pistol only, bleeding out. */
   downed?: boolean;
   /** Seconds of bleedout remaining while downed. Server-side only. */
   bleedout?: number;
   /** Spendable points balance. Mirrored into `score` for replication. */
   points?: number;
-  /** Bitfield of shared/survival.ts PerkId. Server-side; replicated via SurvivalState. */
+  /** Bitfield of shared/zombies.ts PerkId. Server-side; replicated via ZombiesState. */
   perks?: number;
+  /**
+   * [SIM] Movement speed multiplier (ADRENALINE perk). Like
+   * adsMoveSpeedOverride it is never replicated: both sides derive it from
+   * the perk state they hold, so prediction and server agree.
+   */
+  speedMult?: number;
 }
 
 export enum TeamId {
@@ -264,8 +270,8 @@ export enum InputButton {
   /** Held to use the secondary zoom level of Variable Zoom. */
   ZoomToggle = 1 << 8,
   /**
-   * SURVIVAL: interact/revive. `buttons` is already u16 on the wire; bits 9-15
-   * were free (additive; reported per INTEGRATION.md rule 1).
+   * ZOMBIES: interact/revive/repair. `buttons` is already u16 on the wire;
+   * bits 9-15 were free (additive; reported per INTEGRATION.md rule 1).
    */
   Use = 1 << 9,
 }
@@ -308,8 +314,8 @@ export const hasButton = (buttons: number, b: InputButton): boolean => (buttons 
 export enum GameMode {
   SnipersOnlyFFA = 0,
   TeamDeathmatch = 1,
-  /** 1-5 player co-op Zombies (additive; reported per INTEGRATION.md rule 1). */
-  Survival = 2,
+  /** 1-4 player co-op ZOMBIES (wire value unchanged from the old Survival). */
+  Zombies = 2,
 }
 
 export enum RoundPhase {

@@ -561,7 +561,7 @@ export function buildWeaponMesh(
 }
 
 /**
- * Which procedural rig a weapon borrows. The SURVIVAL wall buys reuse the two
+ * Which procedural rig a weapon borrows. The ZOMBIES wall buys reuse the two
  * existing rigs (compact for the SMG, long gun for the rest) rather than
  * shipping four new models — the seam for real recipes is `buildWeaponMesh`.
  */

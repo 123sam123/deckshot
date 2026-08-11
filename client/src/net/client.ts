@@ -30,7 +30,7 @@ import {
   type RoundStateMsg,
   type SnapshotMsg,
   type SpawnMsg,
-  type SurvivalStateMsg,
+  type ZombiesStateMsg,
   type WelcomeMsg,
 } from '../../../shared/protocol.js';
 import type { SnapshotPlayerExt } from '../../../shared/codec.js';
@@ -80,8 +80,8 @@ export interface NetClientEvents {
   /** A remote player fired on this snapshot. Drives tracers and audio. */
   fired: (id: PlayerId) => void;
   reconciled: (result: ReconcileResult) => void;
-  /** SURVIVAL round machine + progression + the recipient's arsenal. */
-  survival: (msg: SurvivalStateMsg) => void;
+  /** ZOMBIES round machine + progression + the recipient's arsenal. */
+  zombies: (msg: ZombiesStateMsg) => void;
 }
 
 type Handler<K extends keyof NetClientEvents> = NetClientEvents[K];
@@ -239,12 +239,12 @@ export class NetClient {
     this.socket.send({ type: ClientMessage.RequestRespawn, data: {} });
   }
 
-  /** SURVIVAL: ask to buy a zone / weapon / perk / upgrade / crate spin. */
+  /** ZOMBIES: ask to buy a zone / weapon / perk / upgrade / box spin. */
   purchase(kind: number, itemId: number): void {
     this.socket.send({ type: ClientMessage.Purchase, data: { kind, itemId } });
   }
 
-  /** SURVIVAL: flip the generator or take the crate's offered weapon. */
+  /** ZOMBIES: flip the power or take the box's offered weapon. */
   interact(target: number): void {
     this.socket.send({ type: ClientMessage.Interact, data: { target } });
   }
@@ -449,8 +449,8 @@ export class NetClient {
       case ServerMessage.MatchOver:
         this.emit('matchover', msg.data as MatchOverMsg);
         return;
-      case ServerMessage.SurvivalState:
-        this.emit('survival', msg.data as SurvivalStateMsg);
+      case ServerMessage.ZombiesState:
+        this.emit('zombies', msg.data as ZombiesStateMsg);
         return;
       default:
         return;

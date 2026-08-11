@@ -208,6 +208,9 @@ export function buildBrushes(
   const bucket = new GeometryBucket();
 
   for (const brush of brushList) {
+    // ZOMBIES window blockers collide with players but are never drawn — the
+    // opening the horde climbs through must LOOK open.
+    if (brush.playersOnly === true) continue;
     const m = brushMatrix(brush);
     const box = () => new THREE.BoxGeometry(brush.half.x * 2, brush.half.y * 2, brush.half.z * 2);
 

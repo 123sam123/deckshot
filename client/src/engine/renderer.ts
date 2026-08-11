@@ -138,6 +138,19 @@ export class Renderer {
     this.lighting.addDynamicLight(pos, color, intensity, lifetime);
   }
 
+  /**
+   * ZOMBIES atmosphere: retune the scene fog (three uniform writes, no
+   * pipeline change). Pass nothing to restore the competitive default —
+   * always call that restore on leaving the mode, the Renderer is shared.
+   */
+  setFogProfile(near = FOG_NEAR, far = FOG_FAR, color = FOG_COLOR): void {
+    const fog = this.scene.fog as THREE.Fog | null;
+    if (!fog) return;
+    fog.near = near;
+    fog.far = far;
+    fog.color.setHex(color);
+  }
+
   /** 0..1 — HUD drives this on damage; scales chromatic aberration + vignette. */
   setDamageIntensity(v: number): void {
     this.postfx.setDamageIntensity(v);

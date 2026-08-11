@@ -53,7 +53,7 @@ export interface KeyBinds {
   melee: string;
   /** Held to select the secondary zoom level of Variable Zoom. */
   zoomToggle: string;
-  /** SURVIVAL: buy, flip the generator, hold to revive. */
+  /** ZOMBIES: buy, flip the power, hold to revive/repair. */
   use: string;
 }
 

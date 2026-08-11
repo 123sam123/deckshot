@@ -10,7 +10,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { GameMode, TeamId } from '../../../../shared/types.js';
 import { MIN_PLAYERS_TO_START } from '../../../../shared/tuning.js';
-import { MAX_PLAYERS_SURVIVAL, MIN_PLAYERS_SURVIVAL } from '../../../../shared/survival.js';
+import { MAX_PLAYERS_ZOMBIES, MIN_PLAYERS_ZOMBIES } from '../../../../shared/zombies.js';
 import { useUI, useUICtx } from '../store.js';
 import { click, copyText, hover, inviteLink } from '../util.js';
 
@@ -34,10 +34,10 @@ export function LobbyScreen(): JSX.Element | null {
   const me = lobby.players.find((p) => p.id === localId);
   const isHost = lobby.hostId === localId;
   const isTdm = lobby.mode === GameMode.TeamDeathmatch;
-  const isSurvival = lobby.mode === GameMode.Survival;
+  const isZombies = lobby.mode === GameMode.Zombies;
   const limits = isTdm ? SCORE_LIMITS_TDM : SCORE_LIMITS_FFA;
   const connected = lobby.players.filter((p) => p.ping < 999).length;
-  const minPlayers = isSurvival ? MIN_PLAYERS_SURVIVAL : MIN_PLAYERS_TO_START;
+  const minPlayers = isZombies ? MIN_PLAYERS_ZOMBIES : MIN_PLAYERS_TO_START;
 
   const doCopy = async (): Promise<void> => {
     click();
@@ -92,23 +92,23 @@ export function LobbyScreen(): JSX.Element | null {
                 TDM
               </button>
               <button
-                className={isSurvival ? 'on' : ''}
-                disabled={!isHost || lobby.players.length > MAX_PLAYERS_SURVIVAL}
+                className={isZombies ? 'on' : ''}
+                disabled={!isHost || lobby.players.length > MAX_PLAYERS_ZOMBIES}
                 title={
-                  lobby.players.length > MAX_PLAYERS_SURVIVAL
-                    ? 'Survival squads cap at 5'
-                    : 'Co-op zombies on the Leviathan'
+                  lobby.players.length > MAX_PLAYERS_ZOMBIES
+                    ? 'Zombies squads cap at 4'
+                    : 'Round-based undead co-op on Shipbreak'
                 }
                 onClick={() => {
                   click();
-                  bridge.setMatchConfig(GameMode.Survival, 0, 0);
+                  bridge.setMatchConfig(GameMode.Zombies, 0, 0);
                 }}
               >
-                SURVIVAL
+                ZOMBIES
               </button>
             </div>
           </div>
-          {!isSurvival ? (
+          {!isZombies ? (
             <div className="ds-row">
               <span className="ds-label" style={{ margin: 0 }}>
                 Score limit
@@ -132,7 +132,7 @@ export function LobbyScreen(): JSX.Element | null {
           ) : (
             <div className="ds-row">
               <span className="ds-label" style={{ margin: 0 }}>
-                1–5 players · survive the drowned crew · earn the Talon back
+                1–4 players · pistol start · doors, perks, the box, the Forge
               </span>
             </div>
           )}
