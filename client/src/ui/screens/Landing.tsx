@@ -8,13 +8,43 @@
  * exists to keep that under three seconds of friction.
  */
 
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { LOBBY_CODE_LENGTH } from '../../../../shared/protocol.js';
 import { FFA_SCORE_LIMIT } from '../../../../shared/tuning.js';
 import { GameMode } from '../../../../shared/types.js';
-import { saveName } from '../persist.js';
+import { loadMode, saveMode, saveName } from '../persist.js';
 import { useUI, useUICtx } from '../store.js';
 import { cleanCodeInput, click, hover, lobbyCodeFromUrl } from '../util.js';
+
+// TDM score limit mirrors LobbyScreen's SCORE_LIMITS_TDM[1]; Survival carries none.
+const SCORE_LIMIT_TDM = 50;
+const scoreLimitFor = (mode: GameMode): number =>
+  mode === GameMode.TeamDeathmatch
+    ? SCORE_LIMIT_TDM
+    : mode === GameMode.Survival
+      ? 0
+      : FFA_SCORE_LIMIT;
+
+interface ModeCard {
+  mode: GameMode;
+  name: string;
+  desc: string;
+  solo?: boolean;
+}
+
+// Order and copy match the ticket: SURVIVAL's solo badge is the whole point —
+// a lone visitor must see there is something to play with nobody else online.
+const MODE_CARDS: ModeCard[] = [
+  { mode: GameMode.SnipersOnlyFFA, name: 'FFA', desc: 'Free-for-all quickscoping · 2+ players' },
+  { mode: GameMode.TeamDeathmatch, name: 'Team Deathmatch', desc: 'Two squads · 2+ players' },
+  {
+    mode: GameMode.Survival,
+    name: 'Survival',
+    desc: 'Co-op Zombies on Leviathan · playable solo · 1–5 players',
+    solo: true,
+  },
+];
 
 export function Landing(): JSX.Element {
   const { store, bridge, setOverlay } = useUICtx();
@@ -24,9 +54,11 @@ export function Landing(): JSX.Element {
   const [joinOpen, setJoinOpen] = useState(false);
   const [code, setCode] = useState('');
   const [shake, setShake] = useState(0);
+  const [mode, setMode] = useState<GameMode>(() => loadMode());
   const [urlCode] = useState<string | null>(() => lobbyCodeFromUrl());
   const nameRef = useRef<HTMLInputElement>(null);
   const codeRef = useRef<HTMLInputElement>(null);
+  const modeRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const autoJoined = useRef(false);
 
   const nameOk = name.trim().length > 0;
@@ -42,7 +74,27 @@ export function Landing(): JSX.Element {
     click();
     commitName();
     store.patch({ pending: 'Creating lobby' });
-    bridge.createLobby(GameMode.SnipersOnlyFFA, FFA_SCORE_LIMIT);
+    bridge.createLobby(mode, scoreLimitFor(mode));
+  };
+
+  const pickMode = (next: GameMode): void => {
+    click();
+    setMode(next);
+    saveMode(next); // persist immediately so the choice survives reload
+  };
+
+  // Arrow keys move selection within the radiogroup, per WAI-ARIA radio pattern.
+  const onModeKey = (e: ReactKeyboardEvent, index: number): void => {
+    let next = index;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') next = (index + 1) % MODE_CARDS.length;
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft')
+      next = (index - 1 + MODE_CARDS.length) % MODE_CARDS.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = MODE_CARDS.length - 1;
+    else return;
+    e.preventDefault();
+    pickMode(MODE_CARDS[next].mode);
+    modeRefs.current[next]?.focus();
   };
 
   const doQuickPlay = (): void => {
@@ -128,6 +180,45 @@ export function Landing(): JSX.Element {
             Invited to lobby <strong style={{ color: 'var(--ui-accent)' }}>{urlCode}</strong> — enter
             a name to drop in
           </p>
+        ) : null}
+
+        {/* Mode picker — create path only; a ?lobby= joiner inherits the host's mode. */}
+        {!urlCode ? (
+          <>
+            <span className="ds-label" id="ds-mode-label">
+              Game mode
+            </span>
+            <div className="ds-modes" role="radiogroup" aria-labelledby="ds-mode-label">
+              {MODE_CARDS.map((card, i) => {
+                const on = card.mode === mode;
+                return (
+                  <button
+                    key={card.mode}
+                    ref={(el) => {
+                      modeRefs.current[i] = el;
+                    }}
+                    type="button"
+                    className={`ds-mode${on ? ' on' : ''}`}
+                    role="radio"
+                    aria-checked={on}
+                    tabIndex={on ? 0 : -1}
+                    onMouseEnter={hover}
+                    onClick={() => pickMode(card.mode)}
+                    onKeyDown={(e) => onModeKey(e, i)}
+                  >
+                    <span className="radio" aria-hidden="true" />
+                    <span className="body">
+                      <span className="n">
+                        {card.name}
+                        {card.solo ? <span className="solo">Solo OK</span> : null}
+                      </span>
+                      <span className="d">{card.desc}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </>
         ) : null}
 
         <div className="ds-col" style={{ marginTop: 20 }}>

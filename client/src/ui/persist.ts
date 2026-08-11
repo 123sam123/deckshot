@@ -12,6 +12,7 @@ import {
   AttachmentId,
   CamoId,
   DEFAULT_LOADOUT,
+  GameMode,
   MAX_ATTACHMENTS,
   SkinId,
   WeaponId,
@@ -22,6 +23,7 @@ import type { UISettings } from './bridge.js';
 const KEY_NAME = 'deckshot.name';
 const KEY_SETTINGS = 'deckshot.settings';
 const KEY_LOADOUT = 'deckshot.loadout';
+const KEY_MODE = 'deckshot.mode';
 
 export const FOV_MIN_DEG = 70;
 export const FOV_MAX_DEG = 110;
@@ -124,4 +126,20 @@ export function loadLoadout(): Loadout {
 
 export function saveLoadout(l: Loadout): void {
   write(KEY_LOADOUT, JSON.stringify(l));
+}
+
+/**
+ * Landing-screen mode picker (see Landing.tsx). Any stored value that is not
+ * one of the three shipping modes clamps back to FFA, so a corrupt or
+ * out-of-range entry never blocks the one-click Create path.
+ */
+export function loadMode(): GameMode {
+  const raw = Number(read(KEY_MODE));
+  return raw === GameMode.TeamDeathmatch || raw === GameMode.Survival
+    ? raw
+    : GameMode.SnipersOnlyFFA;
+}
+
+export function saveMode(mode: GameMode): void {
+  write(KEY_MODE, String(mode));
 }
