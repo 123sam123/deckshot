@@ -53,8 +53,8 @@ Seven zones, six doors, ~10 barrier windows, three deck levels:
 | 2 | Gangway | 750 (from 0) | no | 1 window, wall buy Harrier 1200, perk ADRENALINE |
 | 3 | Engine Room | 1000 (from 1) | no | 1 window, **POWER SWITCH**, perk BULWARK |
 | 4 | Breaker's Yard | 1000 (from 2) | no | 2 windows, wall buy Condor 1750, box spot B, perk SECOND WIND |
-| 5 | Workshop | 1250 (from 3 or 4) | no | 1 window, wall buy Talon 1400, perk HANDLOADER |
-| 6 | Drydock Basin | 1750 (from 5) | **yes** | THE FORGE (pack-a-punch), perk HAIR TRIGGER |
+| 5 | Workshop | 1250 (from 3 or 4) | no | 1 window, wall buy Talon 1400, perk HANDLOADER — the link room closing the 3↔5↔4 loop |
+| 6 | Drydock Basin | 1750 (from 4) | **yes** | THE FORGE (pack-a-punch), perk HAIR TRIGGER — dead end off the Yard |
 
 Total unlock 6500 **[pinned]**. Progression gate: power lives in zone 3, the
 Forge zone needs power. The Yard (4) is the open "run a train" loop; the Hold

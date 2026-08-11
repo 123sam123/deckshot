@@ -259,6 +259,7 @@ export class ZombiesDirector {
     );
     for (const w of map.windows) this.planks[w.id] = PLANKS_MAX;
     this.boxUsesLeft = this.rollBoxUses();
+    (this.windowsView as { defs: MapDef['windows'] }).defs = map.windows;
   }
 
   // -------------------------------------------------------------------------
@@ -799,7 +800,6 @@ export class ZombiesDirector {
     this.currentMembers = members;
     if (this.wiped) return;
     for (const m of members) this.record(m.id);
-    (this.windowsView as { defs: readonly unknown[] }).defs = this.map.windows;
 
     // --- expire effects, drops and box offers -------------------------------
     for (const [kind, until] of this.effects) {

@@ -61,6 +61,7 @@ import {
   isFogRound,
   isZombieId,
   perkCount,
+  speedMultForPerks,
 } from '../../shared/zombies.js';
 import { HordePool } from './gameplay/horde.js';
 import { DropsPool } from './gameplay/drops.js';
@@ -199,6 +200,10 @@ net.on('zombies', (msg) => {
   lastZombies = msg;
   ui.onZombiesState(msg);
   weapons.applyZombiesState(msg);
+  // ADRENALINE reaches movement through PlayerState.speedMult on BOTH sides:
+  // the server sets it from its perk record, prediction mirrors it here —
+  // miss this and every post-perk step rubber-bands.
+  net.predictor.state.speedMult = speedMultForPerks(msg.perks);
   if (zombiesActive) ensureWorld(GameMode.Zombies, msg.zoneMask);
   doors?.setZoneMask(msg.zoneMask);
   barricades?.setPlanks(msg.planks);
