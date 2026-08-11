@@ -125,6 +125,29 @@ export const UI_CSS = `
 .ds-tag.bravo { background: var(--ui-bravo-team); color: #331602; }
 .ds-ping { color: var(--ui-dim); font-variant-numeric: tabular-nums; font-size: 13px; }
 
+/* ------------------------------------------------ landing mode picker */
+.ds-modes { display: flex; flex-direction: column; gap: 8px; }
+.ds-mode {
+  display: flex; align-items: center; gap: 12px; text-align: left; width: 100%;
+  padding: 11px 14px; border: 1px solid var(--ui-line); border-radius: 7px;
+  background: rgba(255,255,255,0.05); color: var(--ui-ink); font: inherit; cursor: pointer;
+  transition: border-color 80ms, background 80ms, box-shadow 80ms;
+}
+.ds-mode:hover { background: rgba(255,255,255,0.1); border-color: rgba(180,220,240,0.4); }
+.ds-mode.on { border-color: var(--ui-accent); background: rgba(59,232,200,0.12); box-shadow: inset 0 0 0 1px var(--ui-accent); }
+.ds-mode:focus-visible { outline: none; border-color: var(--ui-accent); box-shadow: 0 0 0 2px rgba(59,232,200,0.35); }
+.ds-mode .radio { flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--ui-dim); position: relative; }
+.ds-mode.on .radio { border-color: var(--ui-accent); }
+.ds-mode.on .radio::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: var(--ui-accent); }
+.ds-mode .body { flex: 1; }
+.ds-mode .n { display: block; font-weight: 800; font-size: 14px; letter-spacing: 0.08em; text-transform: uppercase; }
+.ds-mode.on .n { color: var(--ui-accent); }
+.ds-mode .d { display: block; font-size: 11.5px; color: var(--ui-dim); margin-top: 2px; letter-spacing: 0.02em; }
+.ds-mode .solo {
+  display: inline-block; margin-left: 8px; font-size: 9px; font-weight: 900; letter-spacing: 0.1em;
+  color: #241a00; background: var(--ui-gold); padding: 1px 6px; border-radius: 4px; vertical-align: middle;
+}
+
 .ds-seg { display: inline-flex; border: 1px solid var(--ui-line); border-radius: 6px; overflow: hidden; }
 .ds-seg button {
   padding: 8px 14px; font: inherit; font-size: 12px; font-weight: 800; letter-spacing: 0.1em;
