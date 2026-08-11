@@ -547,6 +547,276 @@ function buildKestrel(camo: CamoSet, attachments: AttachmentId[]): WeaponRig {
 }
 
 /**
+ * The Osprey 9 — full-auto SMG. Compact carbine: stubby shrouded barrel with
+ * vent holes, side-folding-style skeleton stock, vertical foregrip, long
+ * curved magazine, ring sight. The charging bolt reciprocates on fire (it is
+ * the rig's `slide`).
+ */
+function buildOsprey(camo: CamoSet, _attachments: AttachmentId[]): WeaponRig {
+  const root = new THREE.Group();
+
+  // Receiver: short, boxy, with a top rail.
+  root.add(box(0.056, 0.062, 0.2, camo.metal, 0, 0, -0.02));
+  root.add(box(0.034, 0.012, 0.18, camo.accessory, 0, 0.038, -0.02));
+  // Barrel shroud: fat tube with vent holes, very SMG.
+  const shroudLen = 0.2;
+  root.add(cyl(0.024, 0.024, shroudLen, camo.body, 0, 0.004, -0.12 - shroudLen / 2));
+  for (let i = 0; i < 4; i++) {
+    root.add(cyl(0.0255, 0.0255, 0.006, camo.accessory, 0, 0.004, -0.15 - i * 0.045));
+  }
+  // Muzzle stub past the shroud.
+  const muzzleZ = -0.35;
+  root.add(cyl(0.011, 0.011, 0.04, camo.metal, 0, 0.004, -0.33));
+  // Reciprocating charging bolt on the right (the automatics' `slide`).
+  const slide = new THREE.Group();
+  slide.add(box(0.012, 0.016, 0.05, camo.accessory, 0.034, 0.012, 0.01));
+  root.add(slide);
+  // Vertical foregrip.
+  const fg = box(0.03, 0.085, 0.034, camo.body, 0, -0.07, -0.19);
+  fg.rotation.x = -0.12;
+  root.add(fg);
+  // Pistol grip + trigger guard.
+  const grip = box(0.032, 0.095, 0.046, camo.body, 0, -0.075, 0.055);
+  grip.rotation.x = 0.16;
+  root.add(grip);
+  root.add(box(0.026, 0.005, 0.05, camo.accessory, 0, -0.052, 0.01));
+  // Long curved magazine ahead of the trigger.
+  const magazine = new THREE.Group();
+  const magTop = box(0.034, 0.09, 0.05, camo.accessory, 0, -0.045, 0);
+  magazine.add(magTop);
+  const magLow = box(0.034, 0.075, 0.05, camo.accessory, 0, -0.115, 0.012);
+  magLow.rotation.x = -0.28;
+  magazine.add(magLow);
+  magazine.position.set(0, -0.03, -0.06);
+  root.add(magazine);
+  // Skeleton stock: two thin struts + butt plate.
+  root.add(box(0.012, 0.012, 0.17, camo.metal, -0.016, 0.012, 0.16));
+  root.add(box(0.012, 0.012, 0.17, camo.metal, 0.016, 0.012, 0.16));
+  root.add(box(0.04, 0.09, 0.024, camo.body, 0, -0.02, 0.25));
+  // Ring sight up front + rear notch.
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.014, 0.003, 6, 14), camo.accessory);
+  ring.position.set(0, 0.052, -0.1);
+  root.add(ring);
+  root.add(box(0.006, 0.02, 0.005, camo.accessory, 0, 0.048, -0.1));
+  root.add(box(0.024, 0.014, 0.006, camo.accessory, 0, 0.05, 0.05));
+
+  const muzzle = new THREE.Object3D();
+  muzzle.position.set(0, 0.004, muzzleZ);
+  root.add(muzzle);
+  const ejectPort = new THREE.Object3D();
+  ejectPort.position.set(0.03, 0.01, -0.01);
+  root.add(ejectPort);
+
+  return {
+    root, bolt: null, boltHandle: null, slide, magazine, muzzle, ejectPort,
+    laserBeam: null, hasScope: false, sightHeight: 0.052,
+  };
+}
+
+/**
+ * The Shrike 12 — pump shotgun. Long thick barrel over a parallel magazine
+ * tube, ribbed pump forend, bead sight, deep stock. The pump IS the rig's
+ * `bolt` group, so the existing work-the-action timeline racks it after every
+ * shot; the handle is an empty group (a pump has nothing to lift).
+ */
+function buildShrike(camo: CamoSet, _attachments: AttachmentId[]): WeaponRig {
+  const root = new THREE.Group();
+
+  // Receiver.
+  root.add(box(0.05, 0.064, 0.2, camo.metal, 0, 0, 0.0));
+  // Loading port suggestion.
+  root.add(box(0.004, 0.024, 0.07, camo.accessory, 0.026, -0.012, -0.01));
+  // Barrel + magazine tube beneath it, both long.
+  const barrelLen = 0.5;
+  root.add(cyl(0.015, 0.015, barrelLen, camo.metal, 0, 0.018, -0.1 - barrelLen / 2));
+  root.add(cyl(0.012, 0.012, barrelLen - 0.08, camo.accessory, 0, -0.018, -0.1 - (barrelLen - 0.08) / 2));
+  const muzzleZ = -0.1 - barrelLen;
+  // Bead sight.
+  const bead = new THREE.Mesh(new THREE.SphereGeometry(0.004, 8, 6), camo.accessory);
+  bead.position.set(0, 0.037, muzzleZ + 0.02);
+  root.add(bead);
+  // Pump forend — the animated group.
+  const bolt = new THREE.Group();
+  const pump = box(0.052, 0.05, 0.14, camo.body, 0, -0.014, -0.3);
+  bolt.add(pump);
+  for (let i = 0; i < 5; i++) {
+    bolt.add(box(0.055, 0.04, 0.005, camo.accessory, 0, -0.014, -0.245 - i * 0.026));
+  }
+  const boltHandle = new THREE.Group(); // nothing to lift on a pump
+  bolt.add(boltHandle);
+  root.add(bolt);
+  // Stock with a straight comb.
+  root.add(box(0.046, 0.056, 0.13, camo.body, 0, -0.012, 0.16));
+  const butt = box(0.048, 0.1, 0.14, camo.body, 0, -0.045, 0.28);
+  butt.rotation.x = -0.14;
+  root.add(butt);
+  root.add(box(0.05, 0.11, 0.02, camo.accessory, 0, -0.05, 0.35));
+  // Trigger guard.
+  root.add(box(0.026, 0.006, 0.055, camo.accessory, 0, -0.05, 0.045));
+  // Rear notch sight.
+  root.add(box(0.024, 0.012, 0.006, camo.accessory, 0, 0.04, 0.06));
+
+  const muzzle = new THREE.Object3D();
+  muzzle.position.set(0, 0.018, muzzleZ);
+  root.add(muzzle);
+  const ejectPort = new THREE.Object3D();
+  ejectPort.position.set(0.028, 0.005, -0.02);
+  root.add(ejectPort);
+
+  return {
+    root, bolt, boltHandle, slide: null, magazine: null, muzzle, ejectPort,
+    laserBeam: null, hasScope: false, sightHeight: 0.04,
+  };
+}
+
+/**
+ * The Condor MG — LMG. Heavy silhouette: long barrel under a slotted heat
+ * shield, carry handle, drum magazine, folded bipod, thick fixed stock.
+ */
+function buildCondor(camo: CamoSet, _attachments: AttachmentId[]): WeaponRig {
+  const root = new THREE.Group();
+
+  // Big receiver.
+  root.add(box(0.066, 0.082, 0.3, camo.metal, 0, 0, 0.0));
+  root.add(box(0.04, 0.014, 0.26, camo.accessory, 0, 0.052, 0.0));
+  // Carry handle arch.
+  root.add(box(0.012, 0.05, 0.016, camo.accessory, 0, 0.085, -0.05));
+  root.add(box(0.012, 0.05, 0.016, camo.accessory, 0, 0.085, 0.06));
+  root.add(box(0.016, 0.014, 0.15, camo.body, 0, 0.108, 0.005));
+  // Long heavy barrel + slotted heat shield.
+  const barrelLen = 0.55;
+  root.add(cyl(0.017, 0.02, barrelLen, camo.metal, 0, 0.008, -0.17 - barrelLen / 2));
+  const shield = box(0.05, 0.05, 0.26, camo.body, 0, 0.006, -0.28);
+  root.add(shield);
+  for (let i = 0; i < 5; i++) {
+    root.add(box(0.054, 0.012, 0.03, camo.accessory, 0, 0.02, -0.19 - i * 0.05));
+  }
+  const muzzleZ = -0.17 - barrelLen;
+  // Flash hider cone.
+  root.add(cyl(0.024, 0.014, 0.05, camo.accessory, 0, 0.008, muzzleZ + 0.01));
+  // Folded bipod legs under the shield.
+  const legA = box(0.01, 0.13, 0.012, camo.accessory, -0.02, -0.028, -0.36);
+  legA.rotation.x = 1.35;
+  root.add(legA);
+  const legB = box(0.01, 0.13, 0.012, camo.accessory, 0.02, -0.028, -0.36);
+  legB.rotation.x = 1.35;
+  root.add(legB);
+  // Drum magazine — the read-at-a-glance LMG feature.
+  const magazine = new THREE.Group();
+  const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.05, 18), camo.accessory);
+  drum.rotation.z = Math.PI / 2;
+  magazine.add(drum);
+  const drumLid = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.054, 18), camo.metal);
+  drumLid.rotation.z = Math.PI / 2;
+  magazine.add(drumLid);
+  magazine.position.set(0, -0.075, -0.04);
+  root.add(magazine);
+  // Charging handle (the automatics' `slide`).
+  const slide = new THREE.Group();
+  slide.add(box(0.014, 0.02, 0.06, camo.accessory, 0.042, 0.02, 0.06));
+  root.add(slide);
+  // Grip + thick fixed stock.
+  const grip = box(0.034, 0.1, 0.05, camo.body, 0, -0.08, 0.11);
+  grip.rotation.x = 0.18;
+  root.add(grip);
+  root.add(box(0.05, 0.075, 0.2, camo.body, 0, -0.01, 0.25));
+  root.add(box(0.054, 0.12, 0.03, camo.accessory, 0, -0.03, 0.36));
+  // Irons: hooded front post + rear aperture.
+  root.add(box(0.006, 0.026, 0.006, camo.accessory, 0, 0.062, -0.4));
+  root.add(box(0.022, 0.02, 0.005, camo.accessory, 0, 0.062, 0.1));
+
+  const muzzle = new THREE.Object3D();
+  muzzle.position.set(0, 0.008, muzzleZ);
+  root.add(muzzle);
+  const ejectPort = new THREE.Object3D();
+  ejectPort.position.set(0.036, -0.01, 0.0);
+  root.add(ejectPort);
+
+  return {
+    root, bolt: null, boltHandle: null, slide, magazine, muzzle, ejectPort,
+    laserBeam: null, hasScope: false, sightHeight: 0.066,
+  };
+}
+
+/**
+ * The Harrier DMR — semi-auto marksman rifle. Slimmer than the Talon:
+ * straight-line stock, long slender barrel, 20-round box magazine, and a
+ * low-profile mid-power scope (it IS a scoped rifle, so ADS uses the
+ * overlay like the Talon).
+ */
+function buildHarrier(camo: CamoSet, _attachments: AttachmentId[]): WeaponRig {
+  const root = new THREE.Group();
+
+  // Slab-sided receiver with an integral rail.
+  root.add(box(0.054, 0.07, 0.28, camo.metal, 0, 0, -0.01));
+  root.add(box(0.034, 0.012, 0.3, camo.accessory, 0, 0.042, -0.02));
+  // Slim free-floated barrel + long thin handguard.
+  const barrelLen = 0.58;
+  root.add(cyl(0.011, 0.014, barrelLen, camo.metal, 0, 0, -0.15 - barrelLen / 2));
+  root.add(box(0.046, 0.046, 0.26, camo.body, 0, -0.004, -0.27));
+  const muzzleZ = -0.15 - barrelLen;
+  // Slim brake.
+  root.add(cyl(0.015, 0.015, 0.045, camo.accessory, 0, 0, muzzleZ + 0.01));
+  // 20-round straight box magazine.
+  const magazine = new THREE.Group();
+  magazine.add(box(0.042, 0.1, 0.07, camo.accessory, 0, -0.05, 0));
+  magazine.position.set(0, -0.04, -0.02);
+  root.add(magazine);
+  // Straight-line stock with a tall cheek piece.
+  root.add(box(0.046, 0.05, 0.24, camo.body, 0, 0.004, 0.22));
+  root.add(box(0.042, 0.032, 0.13, camo.body, 0, 0.04, 0.25));
+  root.add(box(0.048, 0.1, 0.026, camo.accessory, 0, -0.01, 0.35));
+  const grip = box(0.032, 0.095, 0.045, camo.body, 0, -0.075, 0.09);
+  grip.rotation.x = 0.2;
+  root.add(grip);
+  root.add(box(0.026, 0.006, 0.05, camo.accessory, 0, -0.05, 0.03));
+  // Low-profile scope: shorter and slimmer than the Talon's.
+  const scopeY = 0.082;
+  root.add(box(0.014, 0.04, 0.018, camo.accessory, 0, 0.058, -0.05));
+  root.add(box(0.014, 0.04, 0.018, camo.accessory, 0, 0.058, 0.03));
+  root.add(cyl(0.015, 0.015, 0.19, camo.accessory, 0, scopeY, -0.01));
+  root.add(cyl(0.024, 0.016, 0.05, camo.accessory, 0, scopeY, -0.125));
+  root.add(cyl(0.016, 0.02, 0.04, camo.accessory, 0, scopeY, 0.1));
+  const glass = new THREE.Mesh(
+    new THREE.CircleGeometry(0.019, 14),
+    new THREE.MeshBasicMaterial({ color: 0x8fc3e8, transparent: true, opacity: 0.55 })
+  );
+  glass.position.set(0, scopeY, -0.152);
+  glass.rotation.y = Math.PI;
+  root.add(glass);
+
+  const muzzle = new THREE.Object3D();
+  muzzle.position.set(0, 0, muzzleZ);
+  root.add(muzzle);
+  const ejectPort = new THREE.Object3D();
+  ejectPort.position.set(0.032, 0.012, -0.03);
+  root.add(ejectPort);
+
+  return {
+    root, bolt: null, boltHandle: null, slide: null, magazine, muzzle, ejectPort,
+    laserBeam: null, hasScope: true, sightHeight: scopeY,
+  };
+}
+
+/** One procedural rig per weapon; the knife borrows the Talon until it has one. */
+function buildRig(id: WeaponId, set: CamoSet, attachments: AttachmentId[]): WeaponRig {
+  switch (id) {
+    case WeaponId.Kestrel:
+      return buildKestrel(set, attachments);
+    case WeaponId.Osprey:
+      return buildOsprey(set, attachments);
+    case WeaponId.Shrike:
+      return buildShrike(set, attachments);
+    case WeaponId.Condor:
+      return buildCondor(set, attachments);
+    case WeaponId.Harrier:
+      return buildHarrier(set, attachments);
+    default:
+      return buildTalon(set, attachments);
+  }
+}
+
+/**
  * Standalone builder so other agents (player rendering) can show the same
  * gun — with visible attachments — in third person.
  */
@@ -555,18 +825,7 @@ export function buildWeaponMesh(
   camo: CamoId,
   attachments: AttachmentId[]
 ): THREE.Group {
-  const set = makeCamoSet(camo);
-  const rig = usesCompactRig(id) ? buildKestrel(set, attachments) : buildTalon(set, attachments);
-  return rig.root;
-}
-
-/**
- * Which procedural rig a weapon borrows. The ZOMBIES wall buys reuse the two
- * existing rigs (compact for the SMG, long gun for the rest) rather than
- * shipping four new models — the seam for real recipes is `buildWeaponMesh`.
- */
-function usesCompactRig(id: WeaponId): boolean {
-  return id === WeaponId.Kestrel || id === WeaponId.Osprey;
+  return buildRig(id, makeCamoSet(camo), attachments).root;
 }
 
 // ---------------------------------------------------------------------------
@@ -729,19 +988,48 @@ interface WeaponPoses {
 }
 
 function posesFor(id: WeaponId, sightHeight: number): WeaponPoses {
-  if (usesCompactRig(id)) {
-    return {
-      hip: pose(0.14, -0.155, -0.32, 0.03, -0.06, 0.02),
-      ads: pose(0, -sightHeight, -0.3),
-      sprint: pose(0.1, -0.13, -0.3, 0.5, 0.35, 0.3),
-    };
+  switch (id) {
+    case WeaponId.Kestrel:
+      return {
+        hip: pose(0.14, -0.155, -0.32, 0.03, -0.06, 0.02),
+        ads: pose(0, -sightHeight, -0.3),
+        sprint: pose(0.1, -0.13, -0.3, 0.5, 0.35, 0.3),
+      };
+    case WeaponId.Osprey:
+      // Compact carbine: tucked in, snappy.
+      return {
+        hip: pose(0.15, -0.16, -0.34, 0.03, -0.06, 0.02),
+        ads: pose(0, -sightHeight, -0.28),
+        sprint: pose(0.1, -0.13, -0.3, 0.48, 0.36, 0.3),
+      };
+    case WeaponId.Shrike:
+      // Shouldered long gun, held a touch lower than the rifle.
+      return {
+        hip: pose(0.16, -0.225, -0.4, 0.03, -0.075, 0.03),
+        ads: pose(0, -sightHeight, -0.24),
+        sprint: pose(0.12, -0.18, -0.38, 0.42, 0.4, 0.32),
+      };
+    case WeaponId.Condor:
+      // Heavy: carried low and wide, sluggish sprint carry.
+      return {
+        hip: pose(0.175, -0.24, -0.44, 0.04, -0.09, 0.045),
+        ads: pose(0, -sightHeight, -0.3),
+        sprint: pose(0.14, -0.2, -0.42, 0.38, 0.46, 0.36),
+      };
+    case WeaponId.Harrier:
+      return {
+        hip: pose(0.16, -0.21, -0.42, 0.035, -0.08, 0.03),
+        ads: pose(0, -sightHeight, -0.18),
+        sprint: pose(0.12, -0.17, -0.4, 0.42, 0.42, 0.32),
+      };
+    default:
+      // Talon (also used for Knife fallback until a knife model exists).
+      return {
+        hip: pose(0.165, -0.215, -0.42, 0.035, -0.08, 0.03),
+        ads: pose(0, -sightHeight, -0.16),
+        sprint: pose(0.12, -0.17, -0.4, 0.42, 0.42, 0.32),
+      };
   }
-  // Talon (also used for Knife fallback until a knife model exists).
-  return {
-    hip: pose(0.165, -0.215, -0.42, 0.035, -0.08, 0.03),
-    ads: pose(0, -sightHeight, -0.16),
-    sprint: pose(0.12, -0.17, -0.4, 0.42, 0.42, 0.32),
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -857,7 +1145,7 @@ export class Viewmodel {
     this.scene.remove(this.rig.root);
     disposeGroup(this.rig.root);
     const set = makeCamoSet(camo);
-    this.rig = usesCompactRig(id) ? buildKestrel(set, this.attachments) : buildTalon(set, this.attachments);
+    this.rig = buildRig(id, set, this.attachments);
     this.poses = posesFor(id, this.rig.sightHeight);
     this.scene.add(this.rig.root);
 
