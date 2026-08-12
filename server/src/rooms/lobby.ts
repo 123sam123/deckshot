@@ -52,6 +52,7 @@ import {
   TeamId,
 } from '../../../shared/types.js';
 import type { Loadout, LobbyCode, PlayerId } from '../../../shared/types.js';
+import { DEFAULT_MAP_ID, MapId, isCompetitiveMapId } from '../../../shared/maps.js';
 import { ScoreKeeper } from '../sim/scoring.js';
 import type { TrickshotContext } from '../../../shared/trickshot.js';
 import type { Connection, LobbyMember, SessionInfo } from './types.js';
@@ -66,6 +67,17 @@ const NAME_MAX = 16;
 function defaultScoreLimit(mode: GameMode): number {
   if (mode === GameMode.Survival) return SURVIVAL_SCORE_LIMIT;
   return mode === GameMode.TeamDeathmatch ? TDM_SCORE_LIMIT : FFA_SCORE_LIMIT;
+}
+
+/**
+ * Clamp an arbitrary byte to a map this mode can actually play. SURVIVAL is
+ * pinned to Leviathan; the competitive modes reject Leviathan and anything
+ * unregistered, both of which fall back to Sundeck.
+ */
+function coerceMapId(mode: GameMode, mapId: MapId | undefined): MapId {
+  if (mode === GameMode.Survival) return MapId.Leviathan;
+  if (mapId === undefined) return DEFAULT_MAP_ID;
+  return isCompetitiveMapId(mapId) ? mapId : DEFAULT_MAP_ID;
 }
 
 /** Clamp an arbitrary byte to a real mode. Unknown values fall back to FFA. */
@@ -123,6 +135,12 @@ export function sanitizeLoadout(raw: Loadout | undefined): Loadout {
 export class Lobby {
   readonly code: LobbyCode;
   mode: GameMode;
+  /**
+   * The arena. Changeable only between matches: a GameRoom builds its collision
+   * world at construction, so swapping mid-match would put the simulation and
+   * every client on different geometry. SURVIVAL pins this to Leviathan.
+   */
+  mapId: MapId;
   scoreLimit: number;
   timeLimit: number;
 
@@ -146,9 +164,10 @@ export class Lobby {
   /** Registry clock at the most recent tick; endMatch anchors timers to it. */
   private lastTickNow = 0;
 
-  constructor(code: LobbyCode, mode: GameMode, scoreLimit: number, timeLimit: number) {
+  constructor(code: LobbyCode, mode: GameMode, scoreLimit: number, timeLimit: number, mapId?: MapId) {
     this.code = code;
     this.mode = coerceMode(mode);
+    this.mapId = coerceMapId(this.mode, mapId);
     if (this.mode === GameMode.Survival) {
       // Kills and clocks must never end a SURVIVAL match — only the wipe does.
       this.scoreLimit = SURVIVAL_SCORE_LIMIT;
@@ -388,7 +407,13 @@ export class Lobby {
   // -------------------------------------------------------------------------
 
   /** Host-only config change. Returns false when `by` is not the host. */
-  setMatchConfig(by: PlayerId, mode: GameMode, scoreLimit: number, timeLimit: number): boolean {
+  setMatchConfig(
+    by: PlayerId,
+    mode: GameMode,
+    scoreLimit: number,
+    timeLimit: number,
+    mapId?: MapId
+  ): boolean {
     if (by !== this.hostId) return false;
     const nextMode = coerceMode(mode);
     // A 6+ player lobby cannot become a 5-seat SURVIVAL squad.
@@ -406,6 +431,9 @@ export class Lobby {
       this.timeLimit =
         Number.isFinite(timeLimit) && timeLimit > 0 ? Math.floor(timeLimit) : MATCH_TIME_LIMIT;
     }
+    // Map edits only land between matches — see the field comment. Switching
+    // INTO or OUT OF Survival always re-derives it, because Survival is pinned.
+    if (!this.inProgress) this.mapId = coerceMapId(this.mode, modeChanged ? undefined : mapId ?? this.mapId);
     if (modeChanged) this.reassignTeams();
     return true;
   }
@@ -514,6 +542,7 @@ export class Lobby {
       code: this.code,
       hostId: this.hostId,
       mode: this.mode,
+      mapId: this.mapId,
       scoreLimit: this.scoreLimit,
       timeLimit: this.timeLimit,
       players,

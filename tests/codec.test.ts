@@ -64,6 +64,7 @@ import {
   type ClientInput,
   type Loadout,
 } from '../shared/types.js';
+import { MapId } from '../shared/mapdef.js';
 import {
   ANGLE_QUANTIZATION,
   MAX_PLAYERS,
@@ -237,9 +238,9 @@ describe('client message round trips', () => {
     expect(
       roundTripClient({
         type: ClientMessage.CreateLobby,
-        data: { mode: GameMode.TeamDeathmatch, scoreLimit: 50 },
+        data: { mode: GameMode.TeamDeathmatch, scoreLimit: 50, mapId: MapId.Hangar },
       })
-    ).toEqual({ type: ClientMessage.CreateLobby, data: { mode: GameMode.TeamDeathmatch, scoreLimit: 50 } });
+    ).toEqual({ type: ClientMessage.CreateLobby, data: { mode: GameMode.TeamDeathmatch, scoreLimit: 50, mapId: MapId.Hangar } });
 
     expect(roundTripClient({ type: ClientMessage.JoinLobby, data: { code: 'K7QX' } })).toEqual({
       type: ClientMessage.JoinLobby,
@@ -264,9 +265,9 @@ describe('client message round trips', () => {
     expect(
       roundTripClient({
         type: ClientMessage.SetMatchConfig,
-        data: { mode: GameMode.SnipersOnlyFFA, scoreLimit: 30, timeLimit: 600 },
+        data: { mode: GameMode.SnipersOnlyFFA, scoreLimit: 30, timeLimit: 600, mapId: MapId.Rooftop },
       }).data
-    ).toEqual({ mode: GameMode.SnipersOnlyFFA, scoreLimit: 30, timeLimit: 600 });
+    ).toEqual({ mode: GameMode.SnipersOnlyFFA, scoreLimit: 30, timeLimit: 600, mapId: MapId.Rooftop });
     expect(
       roundTripClient({ type: ClientMessage.SetLoadout, data: { loadout: LOADOUT } }).data
     ).toEqual({ loadout: LOADOUT });
@@ -377,6 +378,7 @@ describe('server message round trips', () => {
         code: 'ABCD',
         hostId: 0,
         mode: GameMode.SnipersOnlyFFA,
+        mapId: MapId.DeathTrap,
         scoreLimit: 30,
         timeLimit: 600,
         players: [],
@@ -405,6 +407,7 @@ describe('server message round trips', () => {
         code: 'K7QX',
         hostId: 1,
         mode: GameMode.TeamDeathmatch,
+        mapId: MapId.DeathTrap,
         scoreLimit: 50,
         timeLimit: 600,
         players,
@@ -415,6 +418,7 @@ describe('server message round trips', () => {
       code: 'K7QX',
       hostId: 1,
       mode: GameMode.TeamDeathmatch,
+      mapId: MapId.DeathTrap,
       scoreLimit: 50,
       timeLimit: 600,
       players,
@@ -750,6 +754,7 @@ describe('malformed input', () => {
           code: 'ABCD',
           hostId: 1,
           mode: GameMode.SnipersOnlyFFA,
+          mapId: MapId.DeathTrap,
           scoreLimit: 30,
           timeLimit: 600,
           players: [

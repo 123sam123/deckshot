@@ -59,6 +59,7 @@ import {
 } from './interpolation.js';
 import { GameSocket, type GameSocketOptions, type SocketState } from './socket.js';
 import type { NetSimConfig } from './netsim.js';
+import type { MapId } from '../../../shared/mapdef.js';
 
 const RESUME_STORAGE_KEY = 'deckshot.resume';
 const RING_MASK = INPUT_BUFFER_SIZE - 1;
@@ -195,9 +196,9 @@ export class NetClient {
   // Cold path
   // -------------------------------------------------------------------------
 
-  createLobby(mode: GameMode, scoreLimit: number): void {
+  createLobby(mode: GameMode, scoreLimit: number, mapId?: MapId): void {
     this.intent = { kind: 'create', mode, scoreLimit };
-    this.socket.send({ type: ClientMessage.CreateLobby, data: { mode, scoreLimit } });
+    this.socket.send({ type: ClientMessage.CreateLobby, data: { mode, scoreLimit, mapId } });
   }
 
   joinLobby(code: LobbyCode): void {
@@ -225,8 +226,8 @@ export class NetClient {
     this.socket.send({ type: ClientMessage.SetLoadout, data: { loadout } });
   }
 
-  setMatchConfig(mode: GameMode, scoreLimit: number, timeLimit: number): void {
-    this.socket.send({ type: ClientMessage.SetMatchConfig, data: { mode, scoreLimit, timeLimit } });
+  setMatchConfig(mode: GameMode, scoreLimit: number, timeLimit: number, mapId: MapId): void {
+    this.socket.send({ type: ClientMessage.SetMatchConfig, data: { mode, scoreLimit, timeLimit, mapId } });
   }
 
   chat(text: string): void {

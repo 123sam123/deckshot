@@ -469,3 +469,95 @@ moment they drop (no pickup entity); the four new guns borrow the two
 existing viewmodel rigs; Carpenter never drops (no repairable barriers, per
 the plan's out-of-scope list); zombie audio is not yet synthesized.
 
+
+## Phase 9 — three more maps, on the registry SURVIVAL already built
+
+**Sources are Red Eclipse, not Quake/OpenArena/Xonotic.** The obvious open
+source arenas are the idTech-derived ones, whose `.map` sources are text brush
+files a converter could eat. They are all GPL: OpenArena mandates
+GPLv2-or-Public-Domain for anything in an official release, Xonotic is GPLv3+.
+This repo has no `LICENSE` file, and pulling code-copyleft content into it
+raises a question about everything else here that nobody asked to answer. Red
+Eclipse's content defaults to CC BY-SA 4.0 with commercial use and modification
+permitted — an attribution obligation on the map file and nothing more. The
+easier import path was not worth the licence.
+
+**The originals were read from their bot-waypoint graphs, not their geometry.**
+Each Red Eclipse map ships a `.wpt`: the nav graph its bots walk, a gzipped list
+of 3D points and links, in two format generations (`OWPT`: magic + u16 count +
+records; `RWPT`: magic + u32 version + u16 count + records carrying four extra
+bytes per node). Rendered as a top-down occupancy plot, that is the real floor
+plan of a map — lanes, room shapes, floor heights, where the long crossings are.
+It is exactly what an adaptation needs, and nothing in it is copyable geometry.
+
+**Adaptation, not conversion — the movement metrics leave no choice.** Red
+Eclipse has parkour, wall-runs and impulse boosts, and its maps are ~100m across
+with 30m of vertical range. Deckshot has a 0.4m step and a 1.05m jump apex. A
+faithful polygon port would be mostly unreachable space.
+
+**Two independent multi-map systems existed; the SURVIVAL one won.** This work
+was first built on a branch that predated SURVIVAL and grew its own map format,
+registry, string-keyed wire ids and per-map collision cache. SURVIVAL had
+meanwhile built `mapdef.ts` + `maps.ts` with a numeric `MapId`, and — critically
+— `collisionBrushesFor(map, zoneMask)`, because its geometry CHANGES mid-match
+as doors open. A cache of immutable per-map worlds cannot express that. Rather
+than fuse the two, the three arenas were rebuilt on the survival registry and
+only the parts it lacked were carried over: host-selectable maps on the wire,
+per-map environment, and the credits UI. Fewer concepts, and the collision
+conflict simply stops existing.
+
+**SURVIVAL stays pinned to Leviathan.** `competitive: false` keeps it out of the
+lobby picker and `coerceMapId` refuses it for FFA/TDM in both directions. A
+competitive map has no zones, no nav graph and no zombie spawners, so the
+director would have nothing to work with; Leviathan is deliberately asymmetric
+and gated behind purchases, so a deathmatch on it would be unplayable.
+
+**`MapId` is append-only because its value is the wire byte.** One `u8` on
+`CreateLobby`, `SetMatchConfig` and `LobbyState`. `readMapId` clamps anything
+unregistered to Sundeck rather than throwing — a malformed frame must not be
+able to kill a match. PROTOCOL_VERSION 1.2.0 -> 1.3.0.
+
+**Ramps are solved, never sized to their rise.** A ramp whose half-length
+matches its rise leaves its leading edge standing `halfY·cos(angle)` proud of
+the floor — 0.13m to 0.18m at these slopes. That is well under STEP_HEIGHT and
+it is still a wall: the step-up does not resolve against a sloped top face, so
+you stop dead with nothing on screen to explain it. Three ramps shipped like
+that before `solvedRamp` existed; it solves centre and half-length so the top
+corner is flush with what it lands on and the bottom corner is buried 6cm under
+what it leaves.
+
+**Sundeck's four mid spawns were inside the bar counters.** `shared/mapdata.ts`
+is frozen, and its geometry was not touched — but the spawn points are not
+geometry and x=±7.5 put a spawning player inside a solid brush spanning x 5.3 to
+7.7, relying on depenetration to shove them out. Moved to x=±8.3.
+
+## Phase 9b — the tests passed on maps nobody could see in
+
+**Physics tests are blind, and that is not a defect in them.** Symmetry, spawn
+validity, a settle simulation, nine walked routes, a reachability flood-fill and
+a 45,000-walk stuck sweep were all green on a Death Trap whose entire ground
+floor was roofed by a 5m balcony ring — an unlit 3.3m tunnel you spawned inside
+— and a Hangar that was a windowless 4.6m grey crate with a 10m hole at each end,
+two metres from a spawn, that dropped you in the sea. Every one of those maps was
+*correct*. Simulation cannot see. One screenshot from standing height found what
+none of it could, and eye-level renders are now step 4 of adding a map.
+
+**Both maps lost a level rather than gaining a fix.** The originals are enclosed
+halls stacked three deep and Deckshot's lighting is a single baked sky, so an
+interior layer is a lid with nothing under it. Death Trap is two levels now, its
+bridge down from y=6.4 to y=3.3 and reached by four ramps held off the
+centreline so they never cross the map's own 48m sightline. Hangar's hull went
+from 4.6m walls to 1.1m bulwarks with both ends closed, which also removed the
+only way to fall off it. Less faithful to the source; far closer to how the
+source actually plays.
+
+**A railing across a ramp's mouth is invisible in the data.** The bridge
+landing's back rail ran its full 10m width, including the 2.8m each ramp arrives
+through, so you walked all the way up and stopped 0.35m short. Rails bounding a
+surface that a ramp meets are now split at the ramp mouths, the same way the
+pit's end walls are split at the pit ramps.
+
+**Shrine walls stop at 3.10, not 3.00.** The roof's underside is at 3.10, so a
+10cm slit ran the entire way round Unknown Rooftop's shrine — visible from
+anywhere on the deck, and a free sightline through a building that exists
+precisely to block them.

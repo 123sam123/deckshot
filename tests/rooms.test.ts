@@ -18,6 +18,7 @@ import {
 import type { AnyServerMessage } from '../shared/protocol.js';
 import { COUNTDOWN_TIME, MAX_PLAYERS } from '../shared/tuning.js';
 import { GameMode, RoundPhase, TeamId } from '../shared/types.js';
+import { MapId } from '../shared/mapdef.js';
 import { Lobby, LobbyRegistry } from '../server/src/rooms/index.js';
 import type { Connection } from '../server/src/rooms/index.js';
 
@@ -390,11 +391,17 @@ describe('match flow extras', () => {
       mode: GameMode.TeamDeathmatch,
       scoreLimit: 50,
       timeLimit: 300,
+      mapId: MapId.Sundeck,
     });
     expect(res).toBe(ErrorCode.NotHost);
     expect(lobby.mode).toBe(GameMode.SnipersOnlyFFA);
     expect(
-      reg.setMatchConfig(host, { mode: GameMode.TeamDeathmatch, scoreLimit: 50, timeLimit: 300 }),
+      reg.setMatchConfig(host, {
+        mode: GameMode.TeamDeathmatch,
+        scoreLimit: 50,
+        timeLimit: 300,
+        mapId: MapId.Sundeck,
+      }),
     ).toBeNull();
     expect(lobby.mode).toBe(GameMode.TeamDeathmatch);
     expect(lobby.scoreLimit).toBe(50);

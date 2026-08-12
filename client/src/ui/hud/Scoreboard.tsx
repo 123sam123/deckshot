@@ -11,6 +11,7 @@
 import { describeTrickshot } from '../../../../shared/trickshot.js';
 import type { ScoreboardEntry } from '../../../../shared/protocol.js';
 import { GameMode, TeamId } from '../../../../shared/types.js';
+import { mapById } from '../../../../shared/maps.js';
 import { useUI } from '../store.js';
 
 function rowsFromState(
@@ -71,6 +72,20 @@ export function Scoreboard({ title, inline }: { title?: string; inline?: boolean
   return (
     <div className={`ds-board ds-hud-text${inline ? ' inline' : ''}`}>
       <h3>{title ?? 'Scoreboard'}</h3>
+      {/* Doubles as the attribution the adapted maps' licences ask for:
+          whoever is playing can see whose arena it is without leaving. */}
+      {lobby ? (
+        <p className="ds-board-map">
+          {mapById(lobby.mapId).name}
+          {mapById(lobby.mapId).credit ? (
+            <span>
+              {' '}— after “{mapById(lobby.mapId).credit!.original}” by{' '}
+              {mapById(lobby.mapId).credit!.authors} ({mapById(lobby.mapId).credit!.project},{' '}
+              {mapById(lobby.mapId).credit!.license})
+            </span>
+          ) : null}
+        </p>
+      ) : null}
       <table>
         <thead>{header}</thead>
         <tbody>

@@ -2,12 +2,19 @@
  * tools/mapgen.ts — standalone map preview harness (owned by map-and-ocean).
  *
  * Boots a renderer + golden-hour lighting, builds the world from
- * shared/mapdata, and gives you:
+ * shared/maps, and gives you:
  *   - free-fly camera: click to grab mouse, WASD + Q/E (down/up), Shift = fast
  *   - B: toggle collision-brush wireframe overlay (red = solid, cyan =
  *     penetrable, yellow diamonds = spawn points) to verify visuals and
  *     physics brushes line up
  *   - X: toggle overlay depth test (see brushes through walls)
+ *   - M: cycle to the next map in the registry (or ?map=<MapId> on the URL)
+ *   - ?cam=x,y,z,yaw,pitch places the camera exactly, for scripted screenshots
+ *
+ * EYE LEVEL IS PART OF THE JOB. Two maps once passed every physics test in the
+ * suite while being unplayable — a balcony ring that roofed a whole floor into
+ * an unlit tunnel, and 4.6m walls that made an arena a windowless box. Neither
+ * is visible to a simulation. Fly them at y=1.6 before calling a map done.
  *
  * Run with a temporary HTML entry via `npx vite`, e.g. a file that does
  *   <script type="module" src="/@fs/<abs-path>/tools/mapgen.ts"></script>
@@ -16,7 +23,8 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { BRUSHES, SPAWN_POINTS, WATER_LEVEL } from '../shared/mapdata.js';
+import { MAPS, mapById } from '../shared/maps.js';
+import { MapId } from '../shared/mapdef.js';
 import { brushMatrix, buildWorld } from '../client/src/world/index.js';
 
 // --- Renderer --------------------------------------------------------------
@@ -40,6 +48,19 @@ const camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerH
 camera.position.set(14, 6, 34);
 camera.rotation.order = 'YXZ';
 camera.lookAt(0, 1, 0);
+
+// ?cam=x,y,z,yaw,pitch — angles in degrees. Lets a screenshot be reproduced
+// exactly, which is the only way to compare a map before and after a fix.
+{
+  const cam = new URLSearchParams(location.search).get('cam');
+  if (cam) {
+    const n = cam.split(',').map(Number);
+    if (n.length >= 3 && n.every((v) => Number.isFinite(v))) {
+      camera.position.set(n[0], n[1], n[2]);
+      camera.rotation.set(((n[4] ?? 0) * Math.PI) / 180, ((n[3] ?? 0) * Math.PI) / 180, 0);
+    }
+  }
+}
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -110,7 +131,10 @@ scene.add(new THREE.AmbientLight(0xffd9b0, 0.12));
 
 // --- The world -------------------------------------------------------------
 
-const world = buildWorld(scene); // no materials registry: exercises fallbacks
+// ?map=<MapId> picks the arena; M cycles. No materials registry, so the harness
+// also exercises the world builder's procedural fallback materials.
+let map = mapById(Number(new URLSearchParams(location.search).get('map') ?? MapId.Sundeck) as MapId);
+let world = buildWorld(scene, undefined, { map });
 
 // --- Collision wireframe overlay -------------------------------------------
 
@@ -119,7 +143,7 @@ function buildOverlay(): THREE.Group {
   overlay.name = 'collision_overlay';
 
   const edgeGeoms: THREE.BufferGeometry[] = [];
-  for (const brush of BRUSHES) {
+  for (const brush of map.brushes) {
     const box = new THREE.BoxGeometry(brush.half.x * 2, brush.half.y * 2, brush.half.z * 2);
     const edges = new THREE.EdgesGeometry(box);
     box.dispose();
@@ -142,7 +166,7 @@ function buildOverlay(): THREE.Group {
 
   // Spawn points: yellow diamonds with a facing tick.
   const spawnGeoms: THREE.BufferGeometry[] = [];
-  for (const spawn of SPAWN_POINTS) {
+  for (const spawn of map.spawns) {
     const d = new THREE.OctahedronGeometry(0.25).toNonIndexed();
     d.translate(spawn.position.x, spawn.position.y + 0.4, spawn.position.z);
     spawnGeoms.push(d);
@@ -164,8 +188,21 @@ function buildOverlay(): THREE.Group {
   return overlay;
 }
 
-const overlay = buildOverlay();
+let overlay = buildOverlay();
 scene.add(overlay);
+
+/** Tear the whole arena down and rebuild it for `id`. */
+function loadMap(id: MapId): void {
+  const wasVisible = overlay.visible;
+  world.dispose();
+  overlay.removeFromParent();
+  map = mapById(id);
+  world = buildWorld(scene, undefined, { map });
+  overlay = buildOverlay();
+  overlay.visible = wasVisible;
+  scene.add(overlay);
+  console.log(`[mapgen] ${map.name}: ${map.brushes.length} brushes, ${map.spawns.length} spawns`);
+}
 
 // --- Free-fly controls ------------------------------------------------------
 
@@ -173,6 +210,10 @@ const keys = new Set<string>();
 window.addEventListener('keydown', (e) => {
   keys.add(e.code);
   if (e.code === 'KeyB') overlay.visible = !overlay.visible;
+  if (e.code === 'KeyM') {
+    const i = MAPS.findIndex((m) => m.id === map.id);
+    loadMap(MAPS[(i + 1) % MAPS.length].id);
+  }
   if (e.code === 'KeyX') {
     overlay.traverse((o) => {
       const mesh = o as THREE.Mesh;
@@ -238,10 +279,14 @@ function frame(now: number): void {
     `DECKSHOT mapgen — click to fly (WASD, Q/E, Shift)\n` +
     `B: brush overlay (${overlay.visible ? 'ON' : 'off'})   X: overlay depth test\n` +
     `fps ${fps}   draw calls ${renderer.info.render.calls}   tris ${renderer.info.render.triangles}\n` +
-    `pos ${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}   water y=${WATER_LEVEL}`;
+    `${map.name}   pos ${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}   ` +
+    `kill y=${map.waterLevel}   [M] next map`;
 
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 
-console.log(`[mapgen] world built: ${BRUSHES.length} brushes, ${SPAWN_POINTS.length} spawns`);
+console.log(
+  `[mapgen] ${map.name}: ${map.brushes.length} brushes, ${map.spawns.length} spawns ` +
+    `(${MAPS.length} maps registered)`
+);

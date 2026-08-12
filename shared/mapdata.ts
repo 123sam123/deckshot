@@ -304,11 +304,14 @@ export const SPAWN_POINTS: readonly SpawnPoint[] = [
   sp(7, 3.2, 0.75, -28.5, SpawnZone.Stern),
   sp(8, -7.0, 0.0, -24.0, SpawnZone.Stern),
   sp(9, 7.0, 0.0, -24.0, SpawnZone.Stern),
-  // Neutral / mid — walkways and upper deck, for FFA churn
-  sp(10, -7.5, 0.0, 12.0, SpawnZone.Mid),
-  sp(11, 7.5, 0.0, 12.0, SpawnZone.Mid),
-  sp(12, -7.5, 0.0, -12.0, SpawnZone.Mid),
-  sp(13, 7.5, 0.0, -12.0, SpawnZone.Mid),
+  // Neutral / mid — walkways and upper deck, for FFA churn.
+  // x=8.3, not 7.5: the bar counters run x 5.3..7.7 over z 7.5..13.5, so at 7.5
+  // a player spawned INSIDE one and was shoved out by depenetration. Geometry
+  // is frozen; these four spawn points are not, and they were simply wrong.
+  sp(10, -8.3, 0.0, 12.0, SpawnZone.Mid),
+  sp(11, 8.3, 0.0, 12.0, SpawnZone.Mid),
+  sp(12, -8.3, 0.0, -12.0, SpawnZone.Mid),
+  sp(13, 8.3, 0.0, -12.0, SpawnZone.Mid),
   sp(14, 0.0, UPPER_DECK_Y + 0.15, 16.0, SpawnZone.Mid),
   sp(15, 0.0, UPPER_DECK_Y + 0.15, -16.0, SpawnZone.Mid),
 ];

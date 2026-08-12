@@ -82,6 +82,8 @@ import {
   type PlayerId,
   type Vec3,
 } from './types.js';
+import { MapId } from './mapdef.js';
+import { DEFAULT_MAP_ID, mapById } from './maps.js';
 import { INPUT_REDUNDANCY, MAX_PLAYERS } from './tuning.js';
 
 // ---------------------------------------------------------------------------
@@ -118,6 +120,12 @@ const MAX_SCOREBOARD_ROWS = 64;
 const TEXT_ENCODER = new TextEncoder();
 /** Non-fatal: invalid UTF-8 becomes U+FFFD instead of throwing. */
 const TEXT_DECODER = new TextDecoder('utf-8', { fatal: false });
+
+/** Reads a MapId, clamping anything unregistered to the default. */
+function readMapId(r: { u8(): number }): MapId {
+  const raw = r.u8();
+  return mapById(raw as MapId).id;
+}
 
 // ---------------------------------------------------------------------------
 // Writer
@@ -652,6 +660,7 @@ function encodeClientMessage(w: ByteWriter, msg: AnyClientMessage): void {
       const d = msg.data as CreateLobbyMsg;
       w.u8(d.mode);
       w.u16(clampEnum(Math.round(d.scoreLimit), 0, 0xffff));
+      w.u8(d.mapId ?? DEFAULT_MAP_ID);
       return;
     }
     case ClientMessage.JoinLobby: {
@@ -671,6 +680,7 @@ function encodeClientMessage(w: ByteWriter, msg: AnyClientMessage): void {
       w.u8(d.mode);
       w.u16(clampEnum(Math.round(d.scoreLimit), 0, 0xffff));
       w.u16(clampEnum(Math.round(d.timeLimit), 0, 0xffff));
+      w.u8(d.mapId);
       return;
     }
     case ClientMessage.SetLoadout: {
@@ -781,7 +791,11 @@ function decodeClientMessage(r: ByteReader): AnyClientMessage {
     case ClientMessage.CreateLobby:
       return {
         type,
-        data: { mode: clampEnum(r.u8(), GameMode.SnipersOnlyFFA, GameMode.Survival), scoreLimit: r.u16() },
+        data: {
+          mode: clampEnum(r.u8(), GameMode.SnipersOnlyFFA, GameMode.Survival),
+          scoreLimit: r.u16(),
+          mapId: readMapId(r),
+        },
       };
     case ClientMessage.JoinLobby:
       return { type, data: { code: r.str() } };
@@ -798,6 +812,7 @@ function decodeClientMessage(r: ByteReader): AnyClientMessage {
           mode: clampEnum(r.u8(), GameMode.SnipersOnlyFFA, GameMode.Survival),
           scoreLimit: r.u16(),
           timeLimit: r.u16(),
+          mapId: readMapId(r),
         },
       };
     case ClientMessage.SetLoadout:
@@ -838,6 +853,7 @@ function encodeServerMessage(w: ByteWriter, msg: AnyServerMessage): void {
       w.str(d.code ?? '');
       w.u8(d.hostId & 0xff);
       w.u8(d.mode);
+      w.u8(d.mapId);
       w.u16(clampEnum(Math.round(d.scoreLimit), 0, 0xffff));
       w.u16(clampEnum(Math.round(d.timeLimit), 0, 0xffff));
       w.u8(d.inProgress ? 1 : 0);
@@ -1044,6 +1060,7 @@ function decodeServerMessage(r: ByteReader): AnyServerMessage {
       const code = r.str();
       const hostId = r.u8();
       const mode = clampEnum(r.u8(), GameMode.SnipersOnlyFFA, GameMode.Survival) as GameMode;
+      const mapId = readMapId(r);
       const scoreLimit = r.u16();
       const timeLimit = r.u16();
       const inProgress = r.u8() !== 0;
@@ -1059,7 +1076,7 @@ function decodeServerMessage(r: ByteReader): AnyServerMessage {
         const loadout = readLoadout(r);
         players.push({ id, name, team, ready: (flags & 1) !== 0, isHost: (flags & 2) !== 0, ping, loadout });
       }
-      return { type, data: { code, hostId, mode, scoreLimit, timeLimit, players, inProgress } };
+      return { type, data: { code, hostId, mode, mapId, scoreLimit, timeLimit, players, inProgress } };
     }
     case ServerMessage.Error:
       return {

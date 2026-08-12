@@ -65,8 +65,9 @@ import {
   TICK_RATE,
 } from '../../../shared/tuning.js';
 import type { SpawnPoint } from '../../../shared/mapdata.js';
-import { mapForMode, type MapDef } from '../../../shared/maps.js';
-import { createCollisionWorld, type CollisionWorld, type MovementState } from '../../../shared/movement.js';
+import { mapForMode, worldForMap, type MapDef } from '../../../shared/maps.js';
+import { MapId } from '../../../shared/mapdef.js';
+import { type CollisionWorld, type MovementState } from '../../../shared/movement.js';
 import {
   MAX_ENTITIES,
   applySurvivalWeaponMods,
@@ -190,6 +191,8 @@ export interface RoomPlayer {
 
 export interface GameRoomOptions {
   code: string;
+  /** Which arena. Ignored for SURVIVAL, which is pinned to Leviathan. */
+  mapId?: MapId;
   mode?: GameMode;
   scoreLimit?: number;
   timeLimit?: number;
@@ -210,7 +213,7 @@ export class GameRoom {
   readonly scoring: ScoreKeeper;
   private readonly sink: ScoringSink | null;
 
-  private readonly world: CollisionWorld = createCollisionWorld();
+  private readonly world: CollisionWorld;
   /** Zombie slots (12..39) live above the player slots in this ring. */
   private readonly history = new LagCompHistory(MAX_ENTITIES);
   private readonly rewind = new RewindPool();
@@ -249,7 +252,10 @@ export class GameRoom {
     this.sink = opts.scoring ?? null;
     this.hooks = opts.hooks ?? createDefaultHooks();
     this.autoRespawn = opts.autoRespawn !== false;
-    this.mapDef = mapForMode(this.mode);
+    this.mapDef = mapForMode(this.mode, opts.mapId);
+    // SURVIVAL never reads this — its geometry changes as doors open, so the
+    // director owns its own world. See activeWorld().
+    this.world = worldForMap(this.mapDef);
     this.survival =
       this.mode === GameMode.Survival
         ? new SurvivalDirector(this.mapDef, MAX_PLAYERS, {

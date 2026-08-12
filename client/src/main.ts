@@ -16,7 +16,8 @@
 
 import * as THREE from 'three';
 
-import { Renderer, Materials } from './engine/index.js';
+import { Renderer, Materials, computeSunDirection } from './engine/index.js';
+import { SUN_COLOR } from './engine/lighting.js';
 import { buildWorld, type WorldHandle } from './world/index.js';
 import { NetClient, type RemotePlayerState } from './net/index.js';
 import { InputController } from './gameplay/controller.js';
@@ -43,7 +44,8 @@ import {
 import { MATERIAL_PENETRATION, SurfaceMaterial } from '../../shared/mapdata.js';
 import type { ScoreboardEntry, SurvivalStateMsg } from '../../shared/protocol.js';
 import { createCollisionWorld } from '../../shared/collision.js';
-import { InteractableKind, collisionBrushesFor } from '../../shared/maps.js';
+import { InteractableKind, collisionBrushesFor, mapById, worldForMap } from '../../shared/maps.js';
+import { MapId } from '../../shared/mapdef.js';
 import { LEVIATHAN } from '../../shared/leviathan.js';
 import {
   InteractTarget,
@@ -122,16 +124,17 @@ let lastPitch = 0;
 // ---------------------------------------------------------------------------
 
 const bridge: UIBridge = {
-  createLobby: (mode, scoreLimit) => net.createLobby(mode, scoreLimit),
+  createLobby: (mode, scoreLimit, mapId) => net.createLobby(mode, scoreLimit, mapId),
   joinLobby: (code) => net.joinLobby(code),
   quickPlay: () => net.quickPlay(),
   leaveLobby: () => {
     net.leaveLobby();
     controller.releaseLock();
-    ensureWorld(null, 0);
+    ensureWorld(null, MapId.Sundeck, 0);
   },
   setReady: (ready) => net.setReady(ready),
-  setMatchConfig: (mode, scoreLimit, timeLimit) => net.setMatchConfig(mode, scoreLimit, timeLimit),
+  setMatchConfig: (mode, scoreLimit, timeLimit, mapId) =>
+    net.setMatchConfig(mode, scoreLimit, timeLimit, mapId),
   setLoadout: (loadout) => {
     applyLoadout(loadout);
     net.setLoadout(loadout);
@@ -182,13 +185,13 @@ net.on('welcome', (msg) => {
 net.on('lobby', (msg) => {
   ui.onLobbyState(msg);
   survivalActive = msg.mode === GameMode.Survival;
-  ensureWorld(msg.mode, lastSurvival?.zoneMask ?? 1);
+  ensureWorld(msg.mode, msg.mapId, lastSurvival?.zoneMask ?? 1);
 });
 net.on('survival', (msg) => {
   lastSurvival = msg;
   ui.onSurvivalState(msg);
   weapons.applySurvivalState(msg);
-  if (survivalActive) ensureWorld(GameMode.Survival, msg.zoneMask);
+  if (survivalActive) ensureWorld(GameMode.Survival, MapId.Leviathan, msg.zoneMask);
 });
 net.on('round', (msg) => ui.onRoundState(msg));
 net.on('chat', (msg) => ui.onChat(msg));
@@ -311,24 +314,26 @@ function revivePrompt(remotes: Map<PlayerId, RemotePlayerState>): string | null 
  * prediction collision world are built for. Rebuilt when it changes — a zone
  * purchase removes door brushes from BOTH in the same frame the server did.
  */
-let worldKey = 'sundeck';
-function ensureWorld(mode: GameMode | null, zoneMask: number): void {
-  const key = mode === GameMode.Survival ? `leviathan:${zoneMask}` : 'sundeck';
+let worldKey = `${MapId.Sundeck}:0`;
+function ensureWorld(mode: GameMode | null, mapId: MapId, zoneMask: number): void {
+  const map = mode === GameMode.Survival ? LEVIATHAN : mapById(mapId);
+  // The zone mask only participates for SURVIVAL, where opening a zone removes
+  // door brushes from BOTH the render world and the prediction world in the
+  // same frame the server did.
+  const key = `${map.id}:${map.id === MapId.Leviathan ? zoneMask : 0}`;
   if (key === worldKey) return;
   worldKey = key;
   world.dispose();
-  if (mode === GameMode.Survival) {
-    const brushes = collisionBrushesFor(LEVIATHAN, zoneMask);
-    world = buildWorld(renderer.scene, Materials, {
-      brushes,
-      waterLevel: LEVIATHAN.waterLevel,
-    });
-    net.predictor.setWorld(createCollisionWorld(brushes, LEVIATHAN.bounds, LEVIATHAN.waterLevel));
+  if (map.id === MapId.Leviathan) {
+    const brushes = collisionBrushesFor(map, zoneMask);
+    world = buildWorld(renderer.scene, Materials, { map, brushes });
+    net.predictor.setWorld(createCollisionWorld(brushes, map.bounds, map.waterLevel));
   } else {
-    world = buildWorld(renderer.scene, Materials);
-    net.predictor.setWorld(createCollisionWorld());
+    world = buildWorld(renderer.scene, Materials, { map });
+    net.predictor.setWorld(worldForMap(map));
     zombies.sync([], { x: 0, y: 0, z: 0 });
   }
+  world.setSun(computeSunDirection(), SUN_COLOR);
 }
 
 interface SurvivalAction {

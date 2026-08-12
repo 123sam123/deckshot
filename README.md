@@ -62,9 +62,22 @@ kill, so lining two people up gets you a collateral.
 - **One deterministic simulation.** Client and server run literally the same
   movement code from `shared/`, stepped identically. That's what makes
   prediction work.
-- **Sundeck**, a mirror-symmetric three-lane yacht: a pool spine down the
-  middle, walkways port and starboard, two cabins with a corridor between them
-  for the cross-map shot, and catwalks overhead to drop off mid-air.
+- **Four competitive maps**, every one mirror-symmetric about its middle, picked
+  by the host in the lobby:
+  - **Sundeck** — the original three-lane yacht: pool spine down the middle,
+    walkways port and starboard, two cabins with a corridor between them for the
+    cross-map shot, catwalks overhead to drop off mid-air.
+  - **Death Trap** — an offshore rig whose centre is a hole. 48m across the pit,
+    or one bridge over the top. *After the Red Eclipse map by Derek Stegall,
+    Architect, Favorito and SniperGoth (CC BY-SA 4.0).*
+  - **Hangar A482** — a cargo ship's deck split into two 44m bays by a bulkhead
+    you can walk the top of. *After the map by SniperGoth (CC BY-SA 4.0).*
+  - **Unknown Rooftop** — a temple on stilts over a wooded valley, two towers,
+    one plank each. *After the map by SniperGoth (CC BY-SA 4.0).*
+
+  The three adaptations are rebuilt from scratch at Deckshot's movement metrics;
+  no original geometry or asset ships here. See **[MAPS.md](MAPS.md)**.
+  SURVIVAL has its own map, **Leviathan**, and is pinned to it.
 - **10 attachments** that are pure multipliers into one weapon state machine —
   adding an eleventh is one entry in `shared/tuning.ts` and no engine changes.
   The loadout screen shows real computed stat deltas, not hardcoded text.
@@ -83,7 +96,8 @@ kill, so lining two people up gets you a collateral.
 shared/     engine-free game logic — imported by BOTH the browser and the server
 client/     renderer, world, gameplay, netcode, React HUD
 server/     authoritative sim, lobby registry, WebSocket transport
-tests/      309 tests, including a real two-socket end-to-end match
+shared/     one file per arena, plus the map format and the registry
+tests/      478 tests, including a real two-socket end-to-end match
 tools/      map preview harness with a collision wireframe overlay
 ```
 
@@ -96,7 +110,7 @@ lets both sides run the same simulation.
 npm test
 ```
 
-309 tests across 9 files. The interesting ones:
+478 tests across 13 files. The interesting ones:
 
 - **Determinism** — a fixed 600-input sequence produces bit-identical positions
   on replay. This is the guarantee everything else rests on.
@@ -105,6 +119,12 @@ npm test
   sees the other move. Nothing mocked.
 - **Bandwidth** — 12 players moving continuously, measured and printed per run.
 - **Lag** — the client converges over a simulated 150ms / 2% packet loss link.
+- **`tests/maps.test.ts`** — holds every competitive map to one contract: mirror
+  symmetry about Z=0 (an asymmetric spawn advantage is very hard to see and very
+  obvious to lose to), brushes inside the bounds box, no spawn buried in
+  geometry or hanging over a hole, a clear signature sightline, a settle
+  simulation from every spawn, and nine walked routes. It caught four bad
+  spawns, one of them Sundeck's own.
 - **Map symmetry** — asserts no brush lacks its bow-to-stern mirror, because an
   asymmetric spawn advantage is very hard to see and very obvious to lose to.
 
@@ -113,6 +133,8 @@ draw calls, triangles), `?quality=low|medium|high`.
 
 ## Docs
 
+- **[MAPS.md](MAPS.md)** — the five arenas, where the adapted ones came from,
+  what "adaptation" means here, and how to add a sixth.
 - **[TUNING.md](TUNING.md)** — every number that changes how the game feels, and
   what it does. Start with `accuracyLockAt`.
 - **[DECISIONS.md](DECISIONS.md)** — every ambiguous call made during the build

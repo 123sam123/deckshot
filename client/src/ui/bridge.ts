@@ -25,6 +25,7 @@ import type {
   SurvivalStateMsg,
 } from '../../../shared/protocol.js';
 import type { AdsState, GameMode, Loadout, PlayerId, WeaponId } from '../../../shared/types.js';
+import type { MapId } from '../../../shared/mapdef.js';
 
 /** Connection lifecycle as the netcode layer sees it. */
 export type ConnectionPhase = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
@@ -67,14 +68,14 @@ export interface LocalHudState {
  */
 export interface UIBridge {
   /** Send ClientMessage.CreateLobby. UI has already validated the name. */
-  createLobby(mode: GameMode, scoreLimit: number): void;
+  createLobby(mode: GameMode, scoreLimit: number, mapId?: MapId): void;
   /** Send ClientMessage.JoinLobby. `code` is normalized uppercase, 4 chars. */
   joinLobby(code: string): void;
   quickPlay(): void;
   leaveLobby(): void;
   setReady(ready: boolean): void;
   /** Host-only config change; the server enforces NotHost. */
-  setMatchConfig(mode: GameMode, scoreLimit: number, timeLimit: number): void;
+  setMatchConfig(mode: GameMode, scoreLimit: number, timeLimit: number, mapId: MapId): void;
   setLoadout(loadout: Loadout): void;
   /** Update the display name (part of Hello / stored for the next join). */
   setName(name: string): void;

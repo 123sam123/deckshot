@@ -33,6 +33,7 @@ import type {
   Vec3,
   WeaponId,
 } from './types.js';
+import type { MapId } from './mapdef.js';
 
 // ---------------------------------------------------------------------------
 // Message types
@@ -108,6 +109,8 @@ export interface HelloMsg {
 export interface CreateLobbyMsg {
   mode: GameMode;
   scoreLimit: number;
+  /** Arena. Ignored for SURVIVAL, which is pinned to Leviathan. */
+  mapId?: MapId;
 }
 
 export interface JoinLobbyMsg {
@@ -118,6 +121,7 @@ export interface SetMatchConfigMsg {
   mode: GameMode;
   scoreLimit: number;
   timeLimit: number;
+  mapId: MapId;
 }
 
 export interface SetLoadoutMsg {
@@ -184,6 +188,8 @@ export interface LobbyStateMsg {
   code: LobbyCode;
   hostId: PlayerId;
   mode: GameMode;
+  /** The arena the next match will be played on. */
+  mapId: MapId;
   scoreLimit: number;
   timeLimit: number;
   players: LobbyPlayerInfo[];
@@ -433,7 +439,7 @@ export const LOBBY_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const LOBBY_CODE_LENGTH = 4;
 
 /** Bumped on any protocol change. Server rejects mismatched clients. */
-export const PROTOCOL_VERSION = '1.2.0';
+export const PROTOCOL_VERSION = '1.3.0';
 
 // ---------------------------------------------------------------------------
 // Typed message unions — used by the dispatch layer.

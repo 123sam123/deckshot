@@ -31,6 +31,7 @@ import { PerkId } from './survival.js';
 import {
   InteractableKind,
   MapId,
+  PropSet,
   type Interactable,
   type MapDef,
   type Zone,
@@ -632,6 +633,21 @@ export const LEVIATHAN_BOUNDS = {
 export const LEVIATHAN: MapDef = {
   id: MapId.Leviathan,
   name: 'Leviathan',
+  tagline: 'A derelict liner. Eight zones to buy open, and something aboard.',
+  credit: null,
+  // Not pickable for FFA/TDM: deliberately asymmetric, and every route through
+  // it is gated behind a purchase.
+  competitive: false,
+  environment: {
+    ocean: true,
+    ground: null,
+    // Leviathan dresses itself out of its own brushes; the yacht kit would be
+    // wrong on it and the generic sets are built for maps a third its size.
+    props: PropSet.None,
+    poolWater: null,
+    hullHalf: [18, 70],
+  },
+  sightline: null,
   brushes: LEVIATHAN_BRUSHES,
   bounds: LEVIATHAN_BOUNDS,
   waterLevel: LEVIATHAN_WATER_LEVEL,

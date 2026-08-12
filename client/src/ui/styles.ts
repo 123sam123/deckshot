@@ -156,6 +156,24 @@ export const UI_CSS = `
 .ds-seg button.on { background: var(--ui-accent); color: #04241d; }
 .ds-seg button:disabled { cursor: default; opacity: 0.6; }
 
+/* -------------------------------------------------------------- map picker */
+.ds-maps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 14px 0 4px; }
+.ds-map {
+  display: flex; flex-direction: column; gap: 3px; text-align: left; cursor: pointer;
+  padding: 10px 12px; font: inherit; border: 1px solid var(--ui-line); border-radius: 8px;
+  background: rgba(255,255,255,0.03); color: var(--ui-dim);
+}
+.ds-map:hover:not(:disabled) { border-color: var(--ui-accent); }
+.ds-map.on { border-color: var(--ui-accent); background: rgba(59,232,200,0.10); }
+.ds-map:disabled { cursor: default; opacity: 0.55; }
+.ds-map-name { font-size: 13px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ui-ink); }
+.ds-map.on .ds-map-name { color: var(--ui-accent); }
+.ds-map-tag { font-size: 11px; line-height: 1.35; }
+.ds-map-credit { font-size: 10px; line-height: 1.3; opacity: 0.65; }
+.ds-board-map { margin: -6px 0 10px; font-size: 11px; letter-spacing: 0.04em; color: var(--ui-dim); }
+.ds-board-map span { opacity: 0.75; }
+@media (max-width: 560px) { .ds-maps { grid-template-columns: 1fr; } }
+
 /* -------------------------------------------------------------- overlay */
 .ds-overlay {
   position: absolute; inset: 0; pointer-events: auto; z-index: 40;

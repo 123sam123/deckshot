@@ -121,6 +121,7 @@ export function createGameServer(httpServer: HttpServer, opts: GameServerOptions
 
     const room = new GameRoom({
       code: lobby.code,
+      mapId: lobby.mapId,
       mode: lobby.mode,
       scoreLimit: lobby.scoreLimit,
       timeLimit: lobby.timeLimit,

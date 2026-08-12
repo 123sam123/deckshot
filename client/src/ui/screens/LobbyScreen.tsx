@@ -9,6 +9,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { GameMode, TeamId } from '../../../../shared/types.js';
+import { COMPETITIVE_MAPS, mapById } from '../../../../shared/maps.js';
 import { MIN_PLAYERS_TO_START } from '../../../../shared/tuning.js';
 import { MAX_PLAYERS_SURVIVAL, MIN_PLAYERS_SURVIVAL } from '../../../../shared/survival.js';
 import { useUI, useUICtx } from '../store.js';
@@ -76,7 +77,7 @@ export function LobbyScreen(): JSX.Element | null {
                 disabled={!isHost}
                 onClick={() => {
                   click();
-                  bridge.setMatchConfig(GameMode.SnipersOnlyFFA, SCORE_LIMITS_FFA[2], lobby.timeLimit);
+                  bridge.setMatchConfig(GameMode.SnipersOnlyFFA, SCORE_LIMITS_FFA[2], lobby.timeLimit, lobby.mapId);
                 }}
               >
                 FFA
@@ -86,7 +87,7 @@ export function LobbyScreen(): JSX.Element | null {
                 disabled={!isHost}
                 onClick={() => {
                   click();
-                  bridge.setMatchConfig(GameMode.TeamDeathmatch, SCORE_LIMITS_TDM[1], lobby.timeLimit);
+                  bridge.setMatchConfig(GameMode.TeamDeathmatch, SCORE_LIMITS_TDM[1], lobby.timeLimit, lobby.mapId);
                 }}
               >
                 TDM
@@ -101,7 +102,7 @@ export function LobbyScreen(): JSX.Element | null {
                 }
                 onClick={() => {
                   click();
-                  bridge.setMatchConfig(GameMode.Survival, 0, 0);
+                  bridge.setMatchConfig(GameMode.Survival, 0, 0, lobby.mapId);
                 }}
               >
                 SURVIVAL
@@ -121,7 +122,7 @@ export function LobbyScreen(): JSX.Element | null {
                     disabled={!isHost}
                     onClick={() => {
                       click();
-                      bridge.setMatchConfig(lobby.mode, l, lobby.timeLimit);
+                      bridge.setMatchConfig(lobby.mode, l, lobby.timeLimit, lobby.mapId);
                     }}
                   >
                     {l}
@@ -137,6 +138,37 @@ export function LobbyScreen(): JSX.Element | null {
             </div>
           )}
         </div>
+        {/* SURVIVAL is pinned to Leviathan, so the picker only appears for the
+            competitive modes — an empty row would read as a broken control. */}
+        {lobby.mode !== GameMode.Survival ? (
+          <div className="ds-maps">
+            {COMPETITIVE_MAPS.map((m) => (
+              <button
+                key={m.id}
+                className={'ds-map' + (lobby.mapId === m.id ? ' on' : '')}
+                disabled={!isHost || lobby.inProgress}
+                onMouseEnter={hover}
+                onClick={() => {
+                  click();
+                  bridge.setMatchConfig(lobby.mode, lobby.scoreLimit, lobby.timeLimit, m.id);
+                }}
+              >
+                <span className="ds-map-name">{m.name}</span>
+                <span className="ds-map-tag">{m.tagline}</span>
+                <span className="ds-map-credit">
+                  {m.credit
+                    ? `after ${m.credit.original} — ${m.credit.authors} (${m.credit.project}, ${m.credit.license})`
+                    : 'Deckshot original'}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="ds-code-hint" style={{ textAlign: 'left', marginTop: 12 }}>
+            Survival is played on {mapById(lobby.mapId).name}
+          </p>
+        )}
+
         {!isHost ? (
           <p className="ds-code-hint" style={{ textAlign: 'left', marginTop: 4 }}>
             Only the host changes match settings

@@ -248,7 +248,13 @@ export class LobbyRegistry {
   setMatchConfig(conn: Connection, cfg: SetMatchConfigMsg): ErrorCode | null {
     const found = this.find(conn);
     if (!found) return this.fail(conn, ErrorCode.Unknown, 'You are not in a lobby.');
-    const ok = found.lobby.setMatchConfig(found.playerId, cfg.mode, cfg.scoreLimit, cfg.timeLimit);
+    const ok = found.lobby.setMatchConfig(
+      found.playerId,
+      cfg.mode,
+      cfg.scoreLimit,
+      cfg.timeLimit,
+      cfg.mapId
+    );
     if (!ok) return this.fail(conn, ErrorCode.NotHost, 'Only the host can change match settings.');
     found.lobby.autoBalance();
     found.lobby.broadcastLobbyState(this.now);
@@ -309,6 +315,7 @@ export class LobbyRegistry {
       cfg?.mode ?? GameMode.SnipersOnlyFFA,
       cfg?.scoreLimit ?? 0,
       MATCH_TIME_LIMIT,
+      cfg?.mapId,
     );
     this.lobbies.set(code, lobby);
     this.admit(hostConn, lobby, name);

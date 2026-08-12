@@ -9,16 +9,23 @@
  * without touching the frozen file. Engine-free, pure data + pure helpers.
  */
 
-import { BRUSHES, SPAWN_POINTS, WATER_LEVEL, WORLD_BOUNDS, type Brush } from './mapdata.js';
+import { BRUSHES, CROSSMAP_SIGHTLINE, SPAWN_POINTS, WATER_LEVEL, WORLD_BOUNDS, type Brush } from './mapdata.js';
 import { GameMode, type Vec3 } from './types.js';
-import { MapId, type Interactable, type MapDef } from './mapdef.js';
+import { MapId, PropSet, type Interactable, type MapDef } from './mapdef.js';
 import { LEVIATHAN } from './leviathan.js';
+import { DEATHTRAP } from './deathtrap.js';
+import { HANGAR } from './hangar.js';
+import { ROOFTOP } from './rooftop.js';
+import { createCollisionWorld, type CollisionWorld } from './collision.js';
 
 export {
   MapId,
   InteractableKind,
+  PropSet,
   type Interactable,
+  type MapCredit,
   type MapDef,
+  type MapEnvironment,
   type Zone,
   type ZoneBox,
   type ZombieSpawner,
@@ -28,6 +35,17 @@ export {
 export const SUNDECK: MapDef = {
   id: MapId.Sundeck,
   name: 'Sundeck',
+  tagline: 'A yacht at sea. Pool down the middle, catwalks overhead.',
+  credit: null,
+  competitive: true,
+  environment: {
+    ocean: true,
+    ground: null,
+    props: PropSet.Yacht,
+    poolWater: { x: 0, z: 0, y: -0.35, width: 8.2, depth: 13.9 },
+    hullHalf: [10.4, 28.6],
+  },
+  sightline: CROSSMAP_SIGHTLINE,
   brushes: BRUSHES,
   bounds: WORLD_BOUNDS,
   waterLevel: WATER_LEVEL,
@@ -39,12 +57,59 @@ export const SUNDECK: MapDef = {
   doorBrushIdsByZone: [],
 };
 
-export function mapForMode(mode: GameMode): MapDef {
-  return mode === GameMode.Survival ? LEVIATHAN : SUNDECK;
+/**
+ * Registry order — what the lobby's map picker shows, left to right.
+ * MapId values are the wire format and are append-only; this array is only
+ * presentation order, so it may be rearranged freely.
+ */
+export const MAPS: readonly MapDef[] = [SUNDECK, DEATHTRAP, HANGAR, ROOFTOP, LEVIATHAN];
+
+/** The maps a host may pick for FFA / TDM. */
+export const COMPETITIVE_MAPS: readonly MapDef[] = MAPS.filter((m) => m.competitive);
+
+export const DEFAULT_MAP_ID = MapId.Sundeck;
+
+/**
+ * SURVIVAL is pinned to Leviathan: it is the only map with zones, a nav graph
+ * and zombie spawners, and a competitive map would give the director nothing to
+ * work with. The competitive modes take whatever the host picked.
+ */
+export function mapForMode(mode: GameMode, mapId: MapId = DEFAULT_MAP_ID): MapDef {
+  if (mode === GameMode.Survival) return LEVIATHAN;
+  const picked = mapById(mapId);
+  return picked.competitive ? picked : SUNDECK;
 }
 
+/** Unknown ids fall back to the default — a bad wire byte must not kill a match. */
 export function mapById(id: MapId): MapDef {
-  return id === MapId.Leviathan ? LEVIATHAN : SUNDECK;
+  for (const m of MAPS) if (m.id === id) return m;
+  return SUNDECK;
+}
+
+/** True when `id` names a map a host may pick for a competitive match. */
+export function isCompetitiveMapId(id: number): boolean {
+  return COMPETITIVE_MAPS.some((m) => m.id === id);
+}
+
+/**
+ * One immutable collision world per map, built on first use.
+ *
+ * Safe to share between rooms: a world is never mutated, and its scratch arrays
+ * are written and read inside a single synchronous call. SURVIVAL does NOT use
+ * this — its geometry changes as doors open, so `SurvivalDirector` builds and
+ * rebuilds its own from `collisionBrushesFor`.
+ */
+const WORLDS = new Map<MapId, CollisionWorld>();
+
+export function worldForMap(map: MapDef): CollisionWorld {
+  // Sundeck's world is the module-level static one; do not duplicate it.
+  if (map.id === MapId.Sundeck) return createCollisionWorld();
+  let w = WORLDS.get(map.id);
+  if (!w) {
+    w = createCollisionWorld(map.brushes, map.bounds, map.waterLevel);
+    WORLDS.set(map.id, w);
+  }
+  return w;
 }
 
 /**
