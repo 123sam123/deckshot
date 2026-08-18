@@ -20,12 +20,44 @@ Open **http://localhost:5173**. Client runs on Vite, game server on :8080, and
 Vite proxies the WebSocket — so the single-URL behaviour is identical in dev and
 production.
 
-To play with someone else, see **[deploy.md](deploy.md)** — one `fly deploy` and
-you have a public HTTPS link.
-
 To test multiplayer on one machine: open the game in two windows (one normal,
 one private). Create a lobby in the first, hit **COPY INVITE LINK**, paste into
 the second.
+
+To play with someone over the internet, see **[deploy.md](deploy.md)** — one
+`fly deploy` and you have a public HTTPS link.
+
+### Play on your LAN
+
+Everyone on the same network, one machine hosting, no deploy and no config:
+
+```bash
+npm run build
+PORT=8080 npm start
+```
+
+The server prints the address to hand out:
+
+```
+[deckshot] listening on :8080 — production (serving dist/public)
+[deckshot] this machine: http://localhost:8080
+[deckshot] LAN — send this to players on your network: http://192.168.1.42:8080
+```
+
+Everyone opens that URL, one player creates a lobby, and **COPY INVITE LINK**
+gives a link the others can actually open — the client asks the server for its
+LAN address, so a host who is themselves on `localhost` still hands out
+`http://192.168.1.42:8080/?lobby=K7QX` rather than a `localhost` link that
+resolves on every machine and points each of them at their own laptop.
+
+`npm run dev` works on the LAN too (Vite binds every interface and proxies both
+`/ws` and `/lan`), but the built server is one process on one port and is what
+you want for an actual game.
+
+Two things that are not the game's fault when this does not work: macOS will ask
+once whether `node` may accept incoming connections — say yes — and a network
+with client isolation on (most guest and cafe Wi-Fi) blocks machine-to-machine
+traffic entirely, so nothing on it can host anything.
 
 ## Controls
 

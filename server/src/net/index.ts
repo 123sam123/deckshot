@@ -11,6 +11,8 @@
  */
 
 export { createGameServer, DEFAULT_PORT, WS_PATH } from './server.js';
+export { isPrivateIPv4, lanAddresses, lanOrigins } from './lan.js';
+export type { IfaceMap, NetIfaceInfo } from './lan.js';
 export type { GameServer, GameServerOptions } from './server.js';
 
 export { GameRoom, createPlayerState, SNAPSHOT_EVERY } from './room.js';

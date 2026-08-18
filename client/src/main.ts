@@ -27,6 +27,7 @@ import { Effects } from './gameplay/effects/index.js';
 import { AvatarPool, type AvatarState } from './gameplay/avatars.js';
 import { Audio } from './audio/index.js';
 import { mountUI, type UIBridge, type UIHandle, type UISettings } from './ui/index.js';
+import { discoverLanAddress } from './ui/util.js';
 
 import { TICK_DT, TICK_RATE, RESPAWN_DELAY, WEAPONS, eyeHeightForStance } from '../../shared/tuning.js';
 import {
@@ -149,6 +150,12 @@ const bridge: UIBridge = {
 };
 
 const ui: UIHandle = mountUI(uiRoot, bridge);
+
+// Ask the server for this machine's LAN address, so that a host who opened the
+// game on localhost still copies an invite link the rest of the network can
+// open. Fire-and-forget: it resolves long before anyone has made a lobby, and
+// failing simply leaves the link location-derived. See ui/util.ts.
+void discoverLanAddress();
 
 let pendingName = ui.getName();
 

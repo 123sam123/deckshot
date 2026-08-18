@@ -37,10 +37,92 @@ export function fmtClock(totalSeconds: number): string {
   return `${m}:${r < 10 ? '0' : ''}${r}`;
 }
 
+// ---------------------------------------------------------------------------
+// Invite links (and why LAN needs help)
+// ---------------------------------------------------------------------------
+
+/**
+ * The private IPv4 address the server reported at `/lan`, or null.
+ *
+ * The host of a LAN game opens the game at `http://localhost:8080` and hits
+ * "Copy invite link". Naively that copies a `localhost` url — which resolves
+ * perfectly on every machine on the network and points each of them at their
+ * own laptop. The link looks correct and can never work. So when the page
+ * itself is on loopback, the invite link is rebuilt around the address the
+ * server actually answers on.
+ *
+ * Only the HOSTNAME is taken from the server. Protocol, port and path stay
+ * whatever this page was loaded with, which is what makes the same code right
+ * in dev (Vite on :5173, proxying the socket) and in production (the Node
+ * server on :8080 serving both) — the server's own port is the wrong answer in
+ * the first case.
+ */
+let lanAddress: string | null = null;
+
+/** Overrides the discovered LAN address. Tests and dev tooling only. */
+export function setLanAddress(address: string | null): void {
+  lanAddress = address;
+}
+
+/** The LAN address discovered at boot, if the server reported one. */
+export function getLanAddress(): string | null {
+  return lanAddress;
+}
+
+/** True for the hostnames that only ever mean "this machine". */
+export function isLoopbackHost(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  if (h === 'localhost' || h.endsWith('.localhost')) return true;
+  if (h === '::1' || h === '[::1]') return true;
+  // 0.0.0.0 is not loopback, but a browser pointed at it is on this machine
+  // and the address is just as useless to anyone else.
+  if (h === '0.0.0.0') return true;
+  return /^127\./.test(h);
+}
+
+/** The slice of `window.location` an invite link is built from. */
+export interface LinkLocation {
+  protocol: string;
+  hostname: string;
+  port: string;
+  pathname: string;
+}
+
+/**
+ * Asks the server for this machine's LAN address and remembers it.
+ *
+ * Best-effort by construction: off a private network the server reports
+ * nothing, and behind a proxy that does not route `/lan` the fetch fails or
+ * returns something else entirely. Both end with `lanAddress` still null and
+ * the invite link falling back to `window.location`, which is the right answer
+ * in exactly those cases.
+ */
+export async function discoverLanAddress(
+  fetchImpl: typeof fetch = globalThis.fetch
+): Promise<string | null> {
+  try {
+    const res = await fetchImpl('/lan');
+    if (!res.ok) return null;
+    const body: unknown = await res.json();
+    const raw = (body as { addresses?: unknown } | null)?.addresses;
+    const first = Array.isArray(raw) ? raw.find((a) => typeof a === 'string' && a.length > 0) : null;
+    setLanAddress(typeof first === 'string' ? first : null);
+    return lanAddress;
+  } catch {
+    return null;
+  }
+}
+
 /** Shareable invite link for a lobby code. */
-export function inviteLink(code: string): string {
-  const base = `${window.location.origin}${window.location.pathname}`;
-  return `${base}?lobby=${code}`;
+export function inviteLink(
+  code: string,
+  location?: LinkLocation,
+  lan: string | null = lanAddress
+): string {
+  const loc = location ?? window.location;
+  const host = lan !== null && isLoopbackHost(loc.hostname) ? lan : loc.hostname;
+  const port = loc.port ? `:${loc.port}` : '';
+  return `${loc.protocol}//${host}${port}${loc.pathname}?lobby=${code}`;
 }
 
 /** The ?lobby= code from the current URL, cleaned, or null. */

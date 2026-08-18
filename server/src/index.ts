@@ -16,7 +16,7 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createGameServer, DEFAULT_PORT, WS_PATH } from './net/index.js';
+import { createGameServer, DEFAULT_PORT, lanAddresses, lanOrigins, WS_PATH } from './net/index.js';
 
 const PORT = Number(process.env.PORT ?? DEFAULT_PORT);
 
@@ -55,6 +55,17 @@ function handleRequest(req: IncomingMessage, res: ServerResponse): void {
       uptimeSeconds: Math.round((Date.now() - startedAt) / 1000),
       ...stats,
     });
+  }
+
+  // LAN play: the client asks for this when it was itself opened on loopback,
+  // so "Copy invite link" hands out an address the other machines can reach
+  // instead of their own localhost. Empty off a private network, by design —
+  // see server/src/net/lan.ts.
+  if (url.pathname === '/lan') {
+    // `addresses` is what the client wants: it keeps its OWN port, because in
+    // dev the page is on Vite's :5173 while this server is on :8080 and only
+    // the hostname is transferable. `origins` is for humans reading /lan.
+    return json(res, 200, { addresses: lanAddresses(), origins: lanOrigins(PORT) });
   }
 
   if (!HAS_BUILD) {
@@ -124,10 +135,22 @@ function json(res: ServerResponse, status: number, body: unknown): void {
   res.end(payload);
 }
 
+// No host argument: bind every interface, which is what makes the box
+// reachable from the rest of the LAN. Binding 127.0.0.1 would make the game
+// playable only by whoever is sitting at the server.
 httpServer.listen(PORT, () => {
   const mode = HAS_BUILD ? 'production (serving dist/public)' : 'development (Vite serves the client)';
   console.log(`[deckshot] listening on :${PORT} — ${mode}`);
   console.log(`[deckshot] websocket path ${WS_PATH}`);
+  console.log(`[deckshot] this machine: http://localhost:${PORT}`);
+
+  const lan = lanOrigins(PORT);
+  if (lan.length > 0) {
+    console.log(`[deckshot] LAN — send this to players on your network: ${lan[0]}`);
+    for (const origin of lan.slice(1)) console.log(`[deckshot]   also reachable at: ${origin}`);
+  } else {
+    console.log('[deckshot] no private LAN address found — players off this machine will need a tunnel or a public host');
+  }
 });
 
 async function shutdown(signal: string): Promise<void> {
